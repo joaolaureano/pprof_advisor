@@ -1,0 +1,9 @@
+goos: darwin
+goarch: arm64
+pkg: example.com/profadvisor/fixture/matcher
+cpu: Apple M1
+BenchmarkStatic-8     	 2638544	       433.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkParam-8      	 2200514	       545.8 ns/op	     336 B/op	       2 allocs/op
+BenchmarkFanout50-8   	 1384824	       866.6 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	example.com/profadvisor/fixture/matcher	3.787s

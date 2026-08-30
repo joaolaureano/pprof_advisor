@@ -1,0 +1,30 @@
+goos: darwin
+goarch: arm64
+pkg: example.com/profadvisor/fixture/matcher
+cpu: Apple M1
+BenchmarkStatic-8	  200000	       527.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStatic-8	  200000	       527.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStatic-8	  200000	       526.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStatic-8	  200000	       526.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStatic-8	  200000	       525.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStatic-8	  200000	       525.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStatic-8	  200000	       524.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStatic-8	  200000	       525.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkParam-8	  200000	       684.8 ns/op	     336 B/op	       2 allocs/op
+BenchmarkParam-8	  200000	       684.8 ns/op	     336 B/op	       2 allocs/op
+BenchmarkParam-8	  200000	       684.1 ns/op	     336 B/op	       2 allocs/op
+BenchmarkParam-8	  200000	       683.0 ns/op	     336 B/op	       2 allocs/op
+BenchmarkParam-8	  200000	      1241.6 ns/op	     336 B/op	       2 allocs/op
+BenchmarkParam-8	  200000	       964.9 ns/op	     336 B/op	       2 allocs/op
+BenchmarkParam-8	  200000	       741.2 ns/op	     336 B/op	       2 allocs/op
+BenchmarkParam-8	  200000	       772.9 ns/op	     336 B/op	       2 allocs/op
+BenchmarkFanout50-8	  200000	      1491.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFanout50-8	  200000	      1313.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFanout50-8	  200000	      1277.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFanout50-8	  200000	      1896.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFanout50-8	  200000	      1430.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFanout50-8	  200000	      1271.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFanout50-8	  200000	      1149.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFanout50-8	  200000	      1241.9 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	example.com/profadvisor/fixture/matcher	3.310s
