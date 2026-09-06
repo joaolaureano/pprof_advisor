@@ -3,7 +3,7 @@
   "1": "Run",
   "2": "Commands",
   "3": "Run",
-  "4": "Run",
+  "4": "memoryRepo",
   "5": "newRootCmd",
   "6": "FromProfile",
   "7": "load",
@@ -11,5 +11,8 @@
   "9": "apply_test.go",
   "10": "buildUserPrompt",
   "11": "example.com/profadvisor/fixture",
-  "12": "github.com/joaolaureano/profadvisor"
+  "12": "github.com/joaolaureano/profadvisor",
+  "13": "Resolve",
+  "14": "Run",
+  "15": "os/exec.Cmd"
 }

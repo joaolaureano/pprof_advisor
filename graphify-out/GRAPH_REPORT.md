@@ -1,16 +1,16 @@
-# Graph Report - pprof_advisor  (2026-08-30)
+# Graph Report - pprof_advisor  (2026-09-06)
 
 ## Corpus Check
-- 30 files · ~16,082 words
+- 39 files · ~18,335 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 196 nodes · 431 edges · 13 communities (11 shown, 2 thin omitted)
-- Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 39 edges (avg confidence: 0.85)
+- 229 nodes · 492 edges · 16 communities (14 shown, 2 thin omitted)
+- Extraction: 90% EXTRACTED · 10% INFERRED · 0% AMBIGUOUS · INFERRED: 48 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `f38cf432`
+- Built from commit: `edab0304`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -19,7 +19,7 @@
 - Run
 - Commands
 - Run
-- Run
+- memoryRepo
 - newRootCmd
 - FromProfile
 - load
@@ -28,17 +28,20 @@
 - buildUserPrompt
 - example.com/profadvisor/fixture
 - github.com/joaolaureano/profadvisor
+- Resolve
+- Run
+- os/exec.Cmd
 
 ## God Nodes (most connected - your core abstractions)
 1. `Run()` - 19 edges
 2. `Run()` - 17 edges
-3. `FromProfile()` - 16 edges
-4. `Run()` - 15 edges
+3. `Run()` - 17 edges
+4. `FromProfile()` - 16 edges
 5. `realExtract()` - 11 edges
 6. `load()` - 11 edges
 7. `FromReaders()` - 11 edges
-8. `ExtractResult` - 10 edges
-9. `newRootCmd()` - 9 edges
+8. `newRootCmd()` - 10 edges
+9. `ExtractResult` - 10 edges
 10. `TestAppliesOnNewBranch()` - 9 edges
 
 ## Surprising Connections (you probably didn't know these)
@@ -56,35 +59,35 @@
 ## Import Cycles
 - None detected.
 
-## Communities (13 total, 2 thin omitted)
+## Communities (16 total, 2 thin omitted)
 
 ### Community 0 - "testing.T"
-Cohesion: 0.17
-Nodes (23): io.Reader, testing.T, gitOut(), seedRepo(), TestPipelineAcceptsARealImprovement(), TestPipelineRejectsAPlausibleButWorseChange(), compare(), finitePValue() (+15 more)
+Cohesion: 0.16
+Nodes (26): invoke(), TestCLIRejectsInvalidInputs(), TestExtractCLIEmitsV2CPU(), TestVerifyCLIObjectiveAndExitContract(), writeInput(), io.Reader, testing.T, BenchComparison (+18 more)
 
 ### Community 1 - "Run"
-Cohesion: 0.17
-Nodes (19): io.Writer, time.Duration, Options, Result, Run(), checkout(), firstNonEmpty(), Run() (+11 more)
+Cohesion: 0.19
+Nodes (22): context.Context, io.Writer, time.Duration, changedFiles(), git(), gitError(), Options, nextBranch() (+14 more)
 
 ### Community 2 - "Commands"
 Cohesion: 0.10
 Nodes (19): Commands, I/O contract, profadvisor, `profadvisor analyze <extract.json>`, `profadvisor apply <diagnosis.json>`, `profadvisor capture --pkg <pattern> [--dir <repo>] [--bench <regexp>] [--count N]`, `profadvisor extract <cpu.prof>`, `profadvisor run` (+11 more)
 
 ### Community 3 - "Run"
-Cohesion: 0.18
-Nodes (17): sdkClient, anthropic.Client, anthropic.OutputConfigEffort, Client, Options, anthropic.Message, anthropic.MessageNewParams, NewClient() (+9 more)
+Cohesion: 0.14
+Nodes (20): fakeClient, sdkClient, anthropic.Client, anthropic.OutputConfigEffort, Client, Options, anthropic.Message, anthropic.MessageNewParams (+12 more)
 
-### Community 4 - "Run"
-Cohesion: 0.20
-Nodes (16): fakeClient, context.Context, anthropic.Message, anthropic.MessageNewParams, changedFiles(), git(), gitError(), Options (+8 more)
+### Community 4 - "memoryRepo"
+Cohesion: 0.23
+Nodes (10): memoryRepo(), TestInvalidRunConfigurationDoesNotCapture(), TestMemoryPipeline(), gitOut(), anthropic.Message, anthropic.MessageNewParams, seedRepo(), TestPipelineAcceptsARealImprovement() (+2 more)
 
 ### Community 5 - "newRootCmd"
 Cohesion: 0.19
 Nodes (11): newAnalyzeCmd(), newApplyCmd(), newCaptureCmd(), newExtractCmd(), emit(), Execute(), newRootCmd(), newRunCmd() (+3 more)
 
 ### Community 6 - "FromProfile"
-Cohesion: 0.22
-Nodes (18): functionStats, github.com/google/pprof/profile.Function, github.com/google/pprof/profile.Profile, benchmarkModule(), cpuSampleIndex(), FromFile(), FromProfile(), Options (+10 more)
+Cohesion: 0.17
+Nodes (23): functionStats, github.com/google/pprof/profile.Function, github.com/google/pprof/profile.Profile, benchmarkModule(), cpuSampleIndex(), FromFile(), FromProfile(), Options (+15 more)
 
 ### Community 7 - "load"
 Cohesion: 0.21
@@ -102,6 +105,18 @@ Nodes (11): diagnosis(), gitOutput(), gitRun(), readFile(), seedRepo(), TestAppl
 Cohesion: 0.43
 Nodes (5): buildUserPrompt(), nanos(), pct(), trimShape(), TestTrimShape()
 
+### Community 13 - "Resolve"
+Cohesion: 0.26
+Nodes (7): measurementFlags(), Kind, Resolve(), TestDefaultsAndInvalidCombinations(), TestObjectives(), Config, Metric
+
+### Community 14 - "Run"
+Cohesion: 0.47
+Nodes (4): Options, Result, Run(), TestRunCancellationKillsRunningTestProcess()
+
+### Community 15 - "os/exec.Cmd"
+Cohesion: 0.40
+Nodes (3): os/exec.Cmd, configureProcess(), configureProcess()
+
 ## Knowledge Gaps
 - **18 isolated node(s):** `github.com/joaolaureano/profadvisor`, `example.com/profadvisor/fixture`, `What it is pointed at`, `When to use it`, `Requirements` (+13 more)
   These have ≤1 connection - possible missing edges or undocumented components.
@@ -110,17 +125,17 @@ Nodes (5): buildUserPrompt(), nanos(), pct(), trimShape(), TestTrimShape()
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Run()` connect `Run` to `Run`, `buildUserPrompt`, `Run`, `newRootCmd`?**
-  _High betweenness centrality (0.125) - this node is a cross-community bridge._
-- **Why does `Run()` connect `Run` to `testing.T`, `Run`, `Run`, `newRootCmd`, `FromProfile`?**
-  _High betweenness centrality (0.118) - this node is a cross-community bridge._
+- **Why does `Run()` connect `Run` to `testing.T`, `Run`, `memoryRepo`, `newRootCmd`, `FromProfile`?**
+  _High betweenness centrality (0.110) - this node is a cross-community bridge._
+- **Why does `Run()` connect `Run` to `Run`, `buildUserPrompt`, `newRootCmd`, `FromProfile`?**
+  _High betweenness centrality (0.104) - this node is a cross-community bridge._
 - **Why does `TestMatchAndParams()` connect `table` to `testing.T`?**
-  _High betweenness centrality (0.109) - this node is a cross-community bridge._
+  _High betweenness centrality (0.094) - this node is a cross-community bridge._
 - **Are the 6 inferred relationships involving `Run()` (e.g. with `TestAppliesOnNewBranch()` and `TestBadDiffIsRefusedAndLeavesNoBranch()`) actually correct?**
   _`Run()` has 6 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 8 inferred relationships involving `Run()` (e.g. with `buildUserPrompt()` and `TestAPIErrorIsWrapped()`) actually correct?**
   _`Run()` has 8 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 4 inferred relationships involving `Run()` (e.g. with `TestInvalidRunConfigurationDoesNotCapture()` and `TestMemoryPipeline()`) actually correct?**
+  _`Run()` has 4 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 3 inferred relationships involving `FromProfile()` (e.g. with `load()` and `TestNoCPUSampleType()`) actually correct?**
   _`FromProfile()` has 3 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 2 inferred relationships involving `Run()` (e.g. with `TestPipelineAcceptsARealImprovement()` and `TestPipelineRejectsAPlausibleButWorseChange()`) actually correct?**
-  _`Run()` has 2 INFERRED edges - model-reasoned connections that need verification._
