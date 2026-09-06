@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/pprof/profile"
 	"github.com/joaolaureano/profadvisor/internal/fixture"
+	"github.com/joaolaureano/profadvisor/internal/measurement"
 	"github.com/joaolaureano/profadvisor/internal/schema"
 )
 
@@ -52,8 +53,8 @@ func TestAllProfRanksFixtureCode(t *testing.T) {
 
 func TestFilteringChangesTheAnswer(t *testing.T) {
 	result := load(t, paramProfile, Options{})
-	if result.Profile.AnalyzedNanos >= result.Profile.TotalNanos/2 {
-		t.Fatalf("analyzed=%d total=%d: runtime noise was not substantially filtered", result.Profile.AnalyzedNanos, result.Profile.TotalNanos)
+	if result.Profile.Analyzed >= result.Profile.Total/2 {
+		t.Fatalf("analyzed=%d total=%d: runtime noise was not substantially filtered", result.Profile.Analyzed, result.Profile.Total)
 	}
 	for _, hotspot := range result.Hotspots {
 		if strings.HasPrefix(hotspot.Function, "runtime.") {
@@ -99,11 +100,11 @@ func TestPercentagesAreSane(t *testing.T) {
 		if hotspot.FlatPct < 0 || hotspot.FlatPct > 100 {
 			t.Errorf("flat percentage for %q = %v", hotspot.Function, hotspot.FlatPct)
 		}
-		// CumPct is normalized by TotalNanos while FlatPct is normalized by
-		// AnalyzedNanos, so the percentages are not directly comparable after
+		// CumPct is normalized by Total while FlatPct is normalized by
+		// Analyzed, so the percentages are not directly comparable after
 		// filtering. The corresponding raw relationship is always required.
-		if hotspot.CumNanos < hotspot.FlatNanos {
-			t.Errorf("cum nanos %d < flat nanos %d for %q", hotspot.CumNanos, hotspot.FlatNanos, hotspot.Function)
+		if hotspot.Cum < hotspot.Flat {
+			t.Errorf("cum %d < flat %d for %q", hotspot.Cum, hotspot.Flat, hotspot.Function)
 		}
 		flatTotal += hotspot.FlatPct
 	}
@@ -120,10 +121,22 @@ func TestSourceIsAttachedFromTheFixtureTree(t *testing.T) {
 	}
 }
 
-func TestNoCPUSampleType(t *testing.T) {
+// TestWrongProfileKindIsRejected covers the mistake this tool makes easy: a CPU
+// objective pointed at a memory profile. Silently finding no "cpu" samples and
+// reporting zero hotspots would look like a benchmark with nothing to optimize.
+func TestWrongProfileKindIsRejected(t *testing.T) {
 	p := &profile.Profile{SampleType: []*profile.ValueType{{Type: "alloc_space", Unit: "bytes"}}}
-	_, err := FromProfile(p, "memory.prof", Options{})
+	_, err := FromProfile(p, "mem.prof", Options{})
 	if err == nil || !strings.Contains(err.Error(), "no cpu sample type") {
 		t.Fatalf("error = %v, want no cpu sample type", err)
+	}
+	cfg, err := measurement.Resolve(measurement.Memory, "B/op")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cpu := &profile.Profile{SampleType: []*profile.ValueType{{Type: "cpu", Unit: "nanoseconds"}}}
+	if _, err := FromProfile(cpu, "cpu.prof", Options{Measurement: cfg}); err == nil ||
+		!strings.Contains(err.Error(), "no alloc_space sample type") {
+		t.Fatalf("error = %v, want no alloc_space sample type", err)
 	}
 }

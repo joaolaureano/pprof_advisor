@@ -1,4 +1,10 @@
-// Package extract turns CPU profiles into a compact, source-oriented hotspot list.
+// Package extract turns pprof profiles into a compact, source-oriented hotspot
+// list.
+//
+// It reads CPU and memory profiles through the same code path. The only things
+// that differ are which sample type is summed and which frame a sample is
+// charged to, and both come from the measurement.Config it is given rather than
+// from a branch in here.
 package extract
 
 import (
@@ -8,11 +14,15 @@ import (
 	"strings"
 
 	"github.com/google/pprof/profile"
+	"github.com/joaolaureano/profadvisor/internal/measurement"
 	"github.com/joaolaureano/profadvisor/internal/schema"
 )
 
 // Options controls hotspot selection and source context.
 type Options struct {
+	// Measurement says which sample type to read and how to attribute it.
+	// The zero value means CPU nanoseconds.
+	Measurement measurement.Config
 	// TopN is how many hotspots to return after filtering. Zero means 10.
 	TopN int
 	// FocusPrefixes limits hotspots to functions whose name starts with one
@@ -24,14 +34,20 @@ type Options struct {
 }
 
 type functionStats struct {
-	function  *profile.Function
+	function *profile.Function
+	// flat is the cost charged to this function under the configured
+	// attribution; selfFlat is always the leaf-frame cost. They are the same
+	// number for CPU, and differ for memory, where the leaf is the allocator.
+	// selfFlat is never reported: it exists because focus inference has to
+	// run before attribution can, and needs a cost to rank modules by.
 	flat      int64
+	selfFlat  int64
 	cum       int64
 	minLine   int
-	lineNanos map[int]int64
+	lineCosts map[int]int64
 }
 
-// FromFile reads a pprof CPU profile from path and ranks its hotspots.
+// FromFile reads a pprof profile from path and ranks its hotspots.
 func FromFile(path string, opts Options) (*schema.ExtractResult, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -50,9 +66,21 @@ func FromProfile(p *profile.Profile, path string, opts Options) (*schema.Extract
 	if p == nil {
 		return nil, fmt.Errorf("nil profile")
 	}
-	cpuIndex, unit := cpuSampleIndex(p)
-	if cpuIndex < 0 {
-		return nil, fmt.Errorf("no cpu sample type")
+	cfg := opts.Measurement
+	if (cfg == measurement.Config{}) {
+		resolved, err := measurement.Resolve("", "")
+		if err != nil {
+			return nil, err
+		}
+		cfg = resolved
+	}
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	valueIndex := sampleIndex(p, cfg.SampleType)
+	if valueIndex < 0 {
+		return nil, fmt.Errorf("no %s sample type in %s (has %s)",
+			cfg.SampleType, path, sampleTypes(p))
 	}
 
 	stats := make(map[string]*functionStats)
@@ -63,7 +91,7 @@ func FromProfile(p *profile.Profile, path string, opts Options) (*schema.Extract
 		if s := stats[fn.Name]; s != nil {
 			return s
 		}
-		s := &functionStats{function: fn, lineNanos: make(map[int]int64)}
+		s := &functionStats{function: fn, lineCosts: make(map[int]int64)}
 		stats[fn.Name] = s
 		return s
 	}
@@ -78,31 +106,19 @@ func FromProfile(p *profile.Profile, path string, opts Options) (*schema.Extract
 		}
 	}
 
+	// First pass: cumulative cost, and the leaf-frame cost that focus
+	// inference ranks modules by. Attribution cannot run yet, because under
+	// first_focus_frame it needs the focus this pass is about to produce.
 	var total int64
 	for _, sample := range p.Sample {
-		if sample == nil || cpuIndex >= len(sample.Value) {
+		if sample == nil || valueIndex >= len(sample.Value) {
 			continue
 		}
-		value := sample.Value[cpuIndex]
+		value := sample.Value[valueIndex]
 		total += value
 
-		// pprof stores a sample's stack from leaf to root. The first function
-		// in the leaf location is consequently the flat attribution target.
-		if len(sample.Location) > 0 && sample.Location[0] != nil {
-			var leaf profile.Line
-			for _, line := range sample.Location[0].Line {
-				if line.Function != nil {
-					leaf = line
-					break
-				}
-			}
-			if leaf.Function != nil {
-				s := getStats(leaf.Function)
-				s.flat += value
-				if leaf.Line > 0 {
-					s.lineNanos[int(leaf.Line)] += value
-				}
-			}
+		if leaf := leafLine(sample); leaf.Function != nil {
+			getStats(leaf.Function).selfFlat += value
 		}
 
 		seen := make(map[string]*profile.Function)
@@ -134,6 +150,9 @@ func FromProfile(p *profile.Profile, path string, opts Options) (*schema.Extract
 	if len(focus) == 0 {
 		focus = inferFocus(survivors)
 	}
+
+	// Second pass: charge each sample to a frame, now that focus is known.
+	attribute(p, valueIndex, cfg, focus, getStats)
 	if len(focus) > 0 {
 		filtered := survivors[:0]
 		for _, s := range survivors {
@@ -182,7 +201,7 @@ func FromProfile(p *profile.Profile, path string, opts Options) (*schema.Extract
 	result := &schema.ExtractResult{
 		SchemaVersion: schema.Version,
 		Profile: schema.ProfileMeta{
-			Path: path, SampleUnit: unit, TotalNanos: total, AnalyzedNanos: analyzed,
+			Path: path, Measurement: cfg, Total: total, Analyzed: analyzed,
 			DurationNanos: p.DurationNanos, FocusPrefixes: focus,
 			Excluded: topExcluded(excluded, total, 5),
 		},
@@ -195,7 +214,7 @@ func FromProfile(p *profile.Profile, path string, opts Options) (*schema.Extract
 		}
 		h := schema.Hotspot{
 			Function: s.function.Name, File: s.function.Filename, Line: line,
-			FlatNanos: s.flat, CumNanos: s.cum,
+			Flat: s.flat, Cum: s.cum,
 		}
 		if analyzed != 0 {
 			h.FlatPct = float64(s.flat) / float64(analyzed) * 100
@@ -203,19 +222,99 @@ func FromProfile(p *profile.Profile, path string, opts Options) (*schema.Extract
 		if total != 0 {
 			h.CumPct = float64(s.cum) / float64(total) * 100
 		}
-		h.Source = sourceExcerpt(h.File, h.Line, context, s.lineNanos)
+		h.Source = sourceExcerpt(h.File, h.Line, context, s.lineCosts)
 		result.Hotspots = append(result.Hotspots, h)
 	}
 	return result, nil
 }
 
-func cpuSampleIndex(p *profile.Profile) (int, string) {
-	for i, sampleType := range p.SampleType {
-		if sampleType != nil && sampleType.Type == "cpu" {
-			return i, sampleType.Unit
+func sampleIndex(p *profile.Profile, sampleType string) int {
+	for i, t := range p.SampleType {
+		if t != nil && t.Type == sampleType {
+			return i
 		}
 	}
-	return -1, ""
+	return -1
+}
+
+func sampleTypes(p *profile.Profile) string {
+	names := make([]string, 0, len(p.SampleType))
+	for _, t := range p.SampleType {
+		if t != nil {
+			names = append(names, t.Type)
+		}
+	}
+	if len(names) == 0 {
+		return "none"
+	}
+	return strings.Join(names, ", ")
+}
+
+// leafLine returns the innermost frame of a sample. pprof stores a stack from
+// leaf to root, in the locations and in the lines within a location, so the
+// first function encountered is the one that was executing.
+func leafLine(sample *profile.Sample) profile.Line {
+	for _, loc := range sample.Location {
+		if loc == nil {
+			continue
+		}
+		for _, line := range loc.Line {
+			if line.Function != nil {
+				return line
+			}
+		}
+	}
+	return profile.Line{}
+}
+
+// attribute charges every sample's cost to one frame, and to one source line
+// within it, according to the configured attribution rule.
+//
+// The rule exists because "which function is responsible for this cost" has a
+// different answer per profile kind. In a CPU profile the leaf frame is the
+// code that was running, and that is the answer. In a memory profile the leaf
+// is runtime.mallocgc under every single sample; charging it there produces one
+// enormous hotspot in the runtime and no information at all. What the reader
+// needs is the innermost frame belonging to the code under test — the call that
+// asked for the memory, which is the line a patch can change.
+func attribute(p *profile.Profile, valueIndex int, cfg measurement.Config, focus []string, getStats func(*profile.Function) *functionStats) {
+	firstFocusFrame := cfg.Attribution == "first_focus_frame" && len(focus) > 0
+	for _, sample := range p.Sample {
+		if sample == nil || valueIndex >= len(sample.Value) {
+			continue
+		}
+		value := sample.Value[valueIndex]
+		target := leafLine(sample)
+		if firstFocusFrame {
+			target = profile.Line{}
+			for _, loc := range sample.Location {
+				if loc == nil {
+					continue
+				}
+				for _, line := range loc.Line {
+					fn := line.Function
+					if fn == nil || noiseFunction(fn.Name) || !matchesAnyPrefix(fn.Name, focus) {
+						continue
+					}
+					target = line
+					break
+				}
+				if target.Function != nil {
+					break
+				}
+			}
+		}
+		// No in-focus frame: the cost is real and stays in Total, but there
+		// is nothing in the code under test to charge it to.
+		if target.Function == nil {
+			continue
+		}
+		s := getStats(target.Function)
+		s.flat += value
+		if target.Line > 0 {
+			s.lineCosts[int(target.Line)] += value
+		}
+	}
 }
 
 // harnessFunction reports whether name is the measuring instrument rather than
@@ -325,7 +424,7 @@ func inferFocus(survivors []*functionStats) []string {
 			continue
 		}
 		if module := modulePrefix(pkg); !isStdlib(module) {
-			flatByModule[module] += s.flat
+			flatByModule[module] += s.selfFlat
 		}
 	}
 	best := ""
@@ -359,7 +458,7 @@ func modulePrefix(pkg string) string {
 	return strings.Join(parts, "/")
 }
 
-func sourceExcerpt(filename string, fallbackLine, context int, lineNanos map[int]int64) *schema.SourceExcerpt {
+func sourceExcerpt(filename string, fallbackLine, context int, lineCosts map[int]int64) *schema.SourceExcerpt {
 	contents, err := os.ReadFile(filename)
 	if err != nil {
 		return nil
@@ -369,7 +468,7 @@ func sourceExcerpt(filename string, fallbackLine, context int, lineNanos map[int
 		lines = lines[:len(lines)-1]
 	}
 	hottest, hottestValue := fallbackLine, int64(0)
-	for line, value := range lineNanos {
+	for line, value := range lineCosts {
 		if value > hottestValue || (value == hottestValue && (hottest == 0 || line < hottest)) {
 			hottest, hottestValue = line, value
 		}
@@ -391,13 +490,13 @@ func sourceExcerpt(filename string, fallbackLine, context int, lineNanos map[int
 	for i := start; i <= end; i++ {
 		excerptLines[i-start] = strings.TrimRight(lines[i-1], "\r")
 	}
-	excerptNanos := make(map[int]int64)
-	for line, value := range lineNanos {
+	excerptCosts := make(map[int]int64)
+	for line, value := range lineCosts {
 		if line >= start && line <= end && value != 0 {
-			excerptNanos[line] = value
+			excerptCosts[line] = value
 		}
 	}
-	return &schema.SourceExcerpt{File: filename, StartLine: start, EndLine: end, Lines: excerptLines, LineNanos: excerptNanos}
+	return &schema.SourceExcerpt{File: filename, StartLine: start, EndLine: end, Lines: excerptLines, LineCosts: excerptCosts}
 }
 
 // topExcluded reports the hottest filtered-out functions, so the caller can see
@@ -423,7 +522,7 @@ func topExcluded(excluded []*functionStats, total int64, n int) []schema.Exclude
 			continue
 		}
 		c := schema.ExcludedCost{
-			Function: s.function.Name, FlatNanos: s.flat, CumNanos: s.cum,
+			Function: s.function.Name, Flat: s.flat, Cum: s.cum,
 		}
 		if total != 0 {
 			c.FlatPct = float64(s.flat) / float64(total) * 100

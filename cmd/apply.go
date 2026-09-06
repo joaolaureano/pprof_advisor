@@ -30,6 +30,13 @@ func newApplyCmd() *cobra.Command {
 			if err := json.Unmarshal(raw, &d); err != nil {
 				return fmt.Errorf("%s is not analyze output: %w", args[0], err)
 			}
+			// Checked here and not only in analyze: apply is the step that
+			// writes to the user's repository, so reading a document from an
+			// incompatible build is the one place it must not guess.
+			if d.SchemaVersion != schema.Version {
+				return fmt.Errorf("%s has schema version %d, this build speaks %d",
+					args[0], d.SchemaVersion, schema.Version)
+			}
 			res, err := apply.Run(cmd.Context(), &d, opts)
 			if err != nil {
 				return err

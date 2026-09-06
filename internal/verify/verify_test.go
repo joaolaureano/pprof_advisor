@@ -7,15 +7,31 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/joaolaureano/profadvisor/internal/measurement"
 	"github.com/joaolaureano/profadvisor/internal/schema"
 )
+
+// objectives narrows a result to the metric the run was judged on. A comparison
+// now exists per metric, not per benchmark, and the assertions below are about
+// the objective: the fixtures carry B/op and allocs/op columns that are flat
+// across every one of them, so including them would assert that an unchanged
+// number changed by 25%.
+func objectives(result *schema.VerifyResult) []schema.BenchComparison {
+	var out []schema.BenchComparison
+	for _, c := range result.Comparisons {
+		if c.Role == measurement.Objective {
+			out = append(out, c)
+		}
+	}
+	return out
+}
 
 func TestFasterIsImproved(t *testing.T) {
 	result := compareFixtures(t, "bench-baseline.txt", "bench-after-faster.txt")
 	if result.Verdict != schema.VerdictImproved {
 		t.Fatalf("Verdict = %q, want %q", result.Verdict, schema.VerdictImproved)
 	}
-	for _, comparison := range result.Comparisons {
+	for _, comparison := range objectives(result) {
 		if !comparison.Significant {
 			t.Errorf("%s was not significant", comparison.Name)
 		}
@@ -30,7 +46,7 @@ func TestSlowerIsRegressed(t *testing.T) {
 	if result.Verdict != schema.VerdictRegressed {
 		t.Fatalf("Verdict = %q, want %q", result.Verdict, schema.VerdictRegressed)
 	}
-	for _, comparison := range result.Comparisons {
+	for _, comparison := range objectives(result) {
 		if comparison.DeltaPct <= 20 || comparison.DeltaPct >= 30 {
 			t.Errorf("%s DeltaPct = %.2f, want near +25", comparison.Name, comparison.DeltaPct)
 		}
@@ -42,7 +58,7 @@ func TestSameIsNoChange(t *testing.T) {
 	if result.Verdict != schema.VerdictNoChange {
 		t.Fatalf("Verdict = %q, want %q", result.Verdict, schema.VerdictNoChange)
 	}
-	for _, comparison := range result.Comparisons {
+	for _, comparison := range objectives(result) {
 		if comparison.Significant {
 			t.Errorf("%s was unexpectedly significant", comparison.Name)
 		}

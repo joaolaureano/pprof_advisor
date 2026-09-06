@@ -1,7 +1,8 @@
 # profadvisor
 
-Finds a CPU hot-path in **any** Go package that has benchmarks, asks Claude how
-to fix it, and then measures whether the fix actually worked.
+Finds a hot-path in **any** Go package that has benchmarks, asks Claude how to
+fix it, and then measures whether the fix actually worked. It optimizes CPU time
+or memory allocation, chosen per run.
 
 profadvisor is a standalone tool. It has no target of its own and knows nothing
 about the code it is pointed at: you give it a directory and a package pattern,
@@ -26,6 +27,9 @@ repository's root and `--pkg` is a package pattern interpreted inside it:
 export ANTHROPIC_API_KEY=...
 
 ./profadvisor run --dir /path/to/your/repo --pkg ./internal/parser/ --bench . --count 10
+
+# optimize allocation instead of time
+./profadvisor run --dir /path/to/your/repo --pkg ./internal/parser/ --profile memory
 ```
 
 Nothing about the target is assumed or configured anywhere: change `--dir` and
@@ -38,16 +42,21 @@ That file is what both humans and agents should read first.
 
 ## Scope
 
-CPU profiles and `go test -bench` only. Memory, block, and trace profiles are
-not covered, and a target that waits on I/O will get a confident answer that
-means nothing.
+CPU and allocation profiles over `go test -bench`. Block, mutex, and trace
+profiles are not covered, and a target that waits on I/O will get a confident
+answer that means nothing.
+
+A memory run optimizes `B/op` (or `allocs/op`) and keeps `ns/op` as a guard, so
+a patch that saves bytes by spending time is rejected rather than celebrated.
 
 ## Layout
 
 | Path | What it holds |
 |---|---|
 | `cmd/` | Flag parsing, exit codes, JSON on stdout. No logic. |
-| `internal/capture/` | Runs the benchmark; keeps `cpu.prof` and `bench.txt` from one run. |
+| `internal/measurement/` | What a run optimizes: sample type, attribution, metric roles. |
+| `internal/benchmark/` | One `go test -bench` invocation. Process handling only. |
+| `internal/capture/` | Keeps the profile and `bench.txt` from one run. |
 | `internal/extract/` | Ranks hot functions, filters runtime noise, attaches source. |
 | `internal/analyze/` | Builds the prompt and calls the Anthropic API. |
 | `internal/apply/` | Applies the diff on a branch. Refuses a dirty tree; rolls back. |

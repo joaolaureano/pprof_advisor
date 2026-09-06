@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/joaolaureano/profadvisor/internal/measurement"
 	"github.com/joaolaureano/profadvisor/internal/schema"
 )
 
@@ -82,11 +83,11 @@ var responseSchema = map[string]any{
 		},
 		"cause": map[string]any{
 			"type":        "string",
-			"description": "Why this code is hot, citing the specific lines and nanosecond figures from the profile.",
+			"description": "Why this code is hot, citing the specific lines and cost figures from the profile, in the profile's own unit.",
 		},
 		"change": map[string]any{
 			"type":        "string",
-			"description": "What the patch does, in two or three sentences, and the mechanism by which it should be faster.",
+			"description": "What the patch does, in two or three sentences, and the mechanism by which it should improve the objective metric.",
 		},
 		"diff": map[string]any{
 			"type":        "string",
@@ -95,7 +96,7 @@ var responseSchema = map[string]any{
 		"confidence": map[string]any{
 			"type":        "string",
 			"enum":        []string{"high", "medium", "low"},
-			"description": "How likely this change is to produce a statistically significant improvement.",
+			"description": "How likely this change is to produce a statistically significant improvement in the objective metric.",
 		},
 		"risks": map[string]any{
 			"type":        "array",
@@ -109,6 +110,21 @@ var responseSchema = map[string]any{
 func Run(ctx context.Context, c Client, r *schema.ExtractResult, opts Options) (*schema.Diagnosis, error) {
 	if r == nil || len(r.Hotspots) == 0 {
 		return nil, errors.New("analyze: extract result has no hotspots")
+	}
+	// The objective travels in the extract document rather than in Options:
+	// it is a property of the profile that was captured, and letting a caller
+	// pass a different one here would produce a diagnosis about a metric the
+	// hotspots were never ranked by.
+	cfg := r.Profile.Measurement
+	if (cfg == measurement.Config{}) {
+		resolved, err := measurement.Resolve("", "")
+		if err != nil {
+			return nil, err
+		}
+		cfg = resolved
+	}
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("analyze: %w", err)
 	}
 	model := opts.Model
 	if model == "" {
@@ -128,7 +144,7 @@ func Run(ctx context.Context, c Client, r *schema.ExtractResult, opts Options) (
 		Model:     anthropic.Model(model),
 		MaxTokens: maxTokens,
 		System: []anthropic.TextBlockParam{{
-			Text: systemPrompt,
+			Text: systemPrompt(cfg),
 			// The system prompt and schema are byte-identical across every
 			// hotspot in a run, so caching them is free savings on the
 			// second and later calls.
@@ -182,6 +198,7 @@ func Run(ctx context.Context, c Client, r *schema.ExtractResult, opts Options) (
 	return &schema.Diagnosis{
 		SchemaVersion: schema.Version,
 		Model:         model,
+		Measurement:   cfg,
 		Target:        out.Target,
 		Cause:         out.Cause,
 		Change:        out.Change,

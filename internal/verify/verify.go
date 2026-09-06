@@ -1,4 +1,10 @@
 // Package verify compares repeated Go benchmark measurements.
+//
+// A run has one objective, but reading only the objective is how a tool talks
+// itself into a bad change: fewer bytes per operation is not a win if the patch
+// that achieved it doubled the time. So every metric the measurement declares
+// is compared, and each carries the role that says what it is allowed to
+// decide — the objective and its guards vote, the rest are reported.
 package verify
 
 import (
@@ -9,17 +15,19 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/joaolaureano/profadvisor/internal/measurement"
 	"github.com/joaolaureano/profadvisor/internal/schema"
 	"golang.org/x/perf/benchfmt"
 	"golang.org/x/perf/benchmath"
 )
 
-// Options controls which metric and significance level are used for comparison.
+// Options controls which metrics and significance level are used.
 type Options struct {
 	// Alpha is the significance level. Zero means 0.05.
 	Alpha float64
-	// Unit selects which metric to compare. Empty means "ns/op".
-	Unit string
+	// Measurement names the objective and, through it, the guard and
+	// informational metrics. The zero value means CPU nanoseconds.
+	Measurement measurement.Config
 }
 
 // FromFiles reads two go test -bench outputs and compares their measurements.
@@ -42,25 +50,44 @@ func FromFiles(baselinePath, afterPath string, opts Options) (*schema.VerifyResu
 // FromReaders compares measurements from already-open benchmark output streams.
 // Names are retained only to make malformed or empty input actionable.
 func FromReaders(baseline io.Reader, baselineName string, after io.Reader, afterName string, opts Options) (*schema.VerifyResult, error) {
-	unit := opts.Unit
-	if unit == "" {
-		unit = "ns/op"
+	cfg := opts.Measurement
+	if (cfg == measurement.Config{}) {
+		resolved, err := measurement.Resolve("", "")
+		if err != nil {
+			return nil, err
+		}
+		cfg = resolved
+	}
+	if err := cfg.Validate(); err != nil {
+		return nil, err
 	}
 	alpha := opts.Alpha
 	if alpha == 0 {
 		alpha = 0.05
 	}
+	metrics := cfg.Metrics()
+	units := make([]string, 0, len(metrics))
+	for _, m := range metrics {
+		units = append(units, m.Unit)
+	}
 
-	baselineValues, err := readBenchmarks(baseline, baselineName, unit)
+	// Both sides are read once for every unit at the same time: re-reading a
+	// stream is not possible, and re-opening it per metric would allow the
+	// objective and its guard to come from different parses of the same file.
+	baselineValues, err := readBenchmarks(baseline, baselineName, units)
 	if err != nil {
 		return nil, fmt.Errorf("read baseline: %w", err)
 	}
-	afterValues, err := readBenchmarks(after, afterName, unit)
+	afterValues, err := readBenchmarks(after, afterName, units)
 	if err != nil {
 		return nil, fmt.Errorf("read after: %w", err)
 	}
 
-	result := &schema.VerifyResult{SchemaVersion: schema.Version, Verdict: schema.VerdictNoChange}
+	result := &schema.VerifyResult{
+		SchemaVersion: schema.Version,
+		Measurement:   cfg,
+		Verdict:       schema.VerdictNoChange,
+	}
 	names := make([]string, 0, len(baselineValues)+len(afterValues))
 	seen := make(map[string]bool, len(baselineValues)+len(afterValues))
 	for name := range baselineValues {
@@ -74,9 +101,10 @@ func FromReaders(baseline io.Reader, baselineName string, after io.Reader, after
 	}
 	sort.Strings(names)
 
+	objectiveVerdict, guardRegressed := "", false
 	for _, name := range names {
-		oldValues, oldOK := baselineValues[name]
-		newValues, newOK := afterValues[name]
+		oldByUnit, oldOK := baselineValues[name]
+		newByUnit, newOK := afterValues[name]
 		if !oldOK {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("%s: missing from baseline %q", name, baselineName))
 			continue
@@ -85,45 +113,78 @@ func FromReaders(baseline io.Reader, baselineName string, after io.Reader, after
 			result.Warnings = append(result.Warnings, fmt.Sprintf("%s: missing from after %q", name, afterName))
 			continue
 		}
+		for _, metric := range metrics {
+			oldValues, newValues := oldByUnit[metric.Unit], newByUnit[metric.Unit]
+			if len(oldValues) == 0 || len(newValues) == 0 {
+				if metric.Role != measurement.Informational {
+					result.Warnings = append(result.Warnings, fmt.Sprintf(
+						"%s: no %s samples; %s metric could not be checked (is -benchmem on?)",
+						name, metric.Unit, metric.Role))
+				}
+				continue
+			}
+			comparison, warnings := compare(name, metric, oldValues, newValues, alpha)
+			result.Comparisons = append(result.Comparisons, comparison)
+			result.Warnings = append(result.Warnings, warnings...)
 
-		comparison, warnings := compare(name, unit, oldValues, newValues, alpha)
-		result.Comparisons = append(result.Comparisons, comparison)
-		result.Warnings = append(result.Warnings, warnings...)
+			switch metric.Role {
+			case measurement.Objective:
+				if comparison.Verdict == schema.VerdictRegressed {
+					objectiveVerdict = schema.VerdictRegressed
+				} else if comparison.Verdict == schema.VerdictImproved && objectiveVerdict == "" {
+					objectiveVerdict = schema.VerdictImproved
+				}
+			case measurement.Guard:
+				// A guard never earns an acceptance, it only withholds one:
+				// a memory patch that happens to be faster is still judged on
+				// the bytes it saved.
+				if comparison.Verdict == schema.VerdictRegressed {
+					guardRegressed = true
+				}
+			}
+		}
 	}
 
-	for _, comparison := range result.Comparisons {
-		if comparison.Verdict == schema.VerdictRegressed {
-			result.Verdict = schema.VerdictRegressed
-			break
-		}
-		if comparison.Verdict == schema.VerdictImproved {
-			result.Verdict = schema.VerdictImproved
-		}
+	switch {
+	case objectiveVerdict == schema.VerdictRegressed || guardRegressed:
+		result.Verdict = schema.VerdictRegressed
+	case objectiveVerdict == schema.VerdictImproved:
+		result.Verdict = schema.VerdictImproved
 	}
 	return result, nil
 }
 
-// readBenchmarks keeps original units when available so callers can request the
-// familiar units emitted by go test even though benchfmt tidies some internally.
-func readBenchmarks(input io.Reader, name, unit string) (map[string][]float64, error) {
+// readBenchmarks collects every requested unit in one pass, keyed by benchmark
+// name and then by unit. Original units are preferred so callers can ask for
+// the familiar units emitted by go test even though benchfmt tidies some
+// internally.
+func readBenchmarks(input io.Reader, name string, units []string) (map[string]map[string][]float64, error) {
 	if input == nil {
 		return nil, fmt.Errorf("%q: nil reader", name)
 	}
 	reader := benchfmt.NewReader(input, name)
-	values := make(map[string][]float64)
+	values := make(map[string]map[string][]float64)
 	benchmarks := 0
 	for reader.Scan() {
 		switch record := reader.Result().(type) {
 		case *benchfmt.Result:
 			benchmarks++
-			for _, value := range record.Values {
-				if value.OrigUnit == unit {
-					values[record.Name.String()] = append(values[record.Name.String()], value.OrigValue)
-					break
-				}
-				if value.Unit == unit {
-					values[record.Name.String()] = append(values[record.Name.String()], value.Value)
-					break
+			key := record.Name.String()
+			byUnit := values[key]
+			if byUnit == nil {
+				byUnit = make(map[string][]float64, len(units))
+				values[key] = byUnit
+			}
+			for _, unit := range units {
+				for _, value := range record.Values {
+					if value.OrigUnit == unit {
+						byUnit[unit] = append(byUnit[unit], value.OrigValue)
+						break
+					}
+					if value.Unit == unit {
+						byUnit[unit] = append(byUnit[unit], value.Value)
+						break
+					}
 				}
 			}
 		case *benchfmt.SyntaxError:
@@ -139,7 +200,7 @@ func readBenchmarks(input io.Reader, name, unit string) (map[string][]float64, e
 	return values, nil
 }
 
-func compare(name, unit string, oldValues, newValues []float64, alpha float64) (schema.BenchComparison, []string) {
+func compare(name string, metric measurement.Metric, oldValues, newValues []float64, alpha float64) (schema.BenchComparison, []string) {
 	oldSample := benchmath.NewSample(oldValues, &benchmath.DefaultThresholds)
 	newSample := benchmath.NewSample(newValues, &benchmath.DefaultThresholds)
 	confidence := 1 - alpha
@@ -155,7 +216,7 @@ func compare(name, unit string, oldValues, newValues []float64, alpha float64) (
 	verdict := schema.VerdictNoChange
 	if significant && delta != 0 {
 		improved := delta < 0
-		if strings.HasSuffix(unit, "/s") {
+		if !metric.LowerIsBetter || strings.HasSuffix(metric.Unit, "/s") {
 			improved = delta > 0
 		}
 		if improved {
@@ -168,7 +229,8 @@ func compare(name, unit string, oldValues, newValues []float64, alpha float64) (
 	warnings := warningStrings(name, oldSample.Warnings, newSample.Warnings, oldSummary.Warnings, newSummary.Warnings, stat.Warnings)
 	return schema.BenchComparison{
 		Name:           name,
-		Unit:           unit,
+		Unit:           metric.Unit,
+		Role:           metric.Role,
 		BaselineCenter: oldSummary.Center,
 		AfterCenter:    newSummary.Center,
 		BaselineN:      len(oldValues),

@@ -90,7 +90,7 @@ func TestPromptCarriesTheProfileEvidence(t *testing.T) {
 		}
 	}
 	// Scoped to the hotspot section on purpose. Runtime frames are allowed —
-	// wanted, even — in the "where the filtered time went" block above it,
+	// wanted, even — in the "where the filtered cost went" block above it,
 	// because that is what explains the cost. What must never happen is a
 	// runtime frame appearing as something to edit.
 	_, hotspots, found := strings.Cut(prompt, "# Hotspots, hottest first")
@@ -100,8 +100,8 @@ func TestPromptCarriesTheProfileEvidence(t *testing.T) {
 	if strings.Contains(hotspots, "runtime.") {
 		t.Error("a filtered runtime frame was ranked as a hotspot")
 	}
-	if !strings.Contains(prompt, "Where the filtered time went") {
-		t.Error("the filtered time was reported as a total but not attributed")
+	if !strings.Contains(prompt, "Where the filtered cost went") {
+		t.Error("the filtered cost was reported as a total but not attributed")
 	}
 }
 

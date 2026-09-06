@@ -11,12 +11,16 @@ func newCaptureCmd() *cobra.Command {
 	var opts capture.Options
 	c := &cobra.Command{
 		Use:   "capture",
-		Short: "Run a benchmark, saving a CPU profile and the benchmark output",
-		Long: "Runs `go test -bench` once, keeping both artifacts the pipeline needs:\n" +
-			"  cpu.prof   the CPU profile, input to `extract`\n" +
-			"  bench.txt  the raw benchmark output, input to `verify`\n\n" +
-			"Both come from the same run so the diagnosis and the verdict describe " +
-			"the same program.",
+		Short: "Run a benchmark, saving a profile and the benchmark output",
+		Long: "Runs `go test -bench -benchmem` once, keeping both artifacts the " +
+			"pipeline needs:\n" +
+			"  cpu.prof / mem.prof  the profile, input to `extract`\n" +
+			"  bench.txt            the raw benchmark output, input to `verify`\n\n" +
+			"Which profile is written follows from --profile. -benchmem is always on, " +
+			"whatever the objective, because `verify` needs ns/op, B/op and allocs/op " +
+			"from the same output to guard one against another.\n\nBoth artifacts come " +
+			"from the same run so the diagnosis and the verdict describe the same " +
+			"program.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := capture.Run(cmd.Context(), opts)
@@ -34,6 +38,7 @@ func newCaptureCmd() *cobra.Command {
 	f.StringVar(&opts.Benchtime, "benchtime", "", "-benchtime, e.g. 1s or 2000x")
 	f.StringVar(&opts.OutDir, "out", "profadvisor-out", "root for the timestamped output directory")
 	f.DurationVar(&opts.Timeout, "timeout", 20*time.Minute, "abort the run after this long")
+	measurementFlags(c, &opts.Profile, &opts.Unit)
 	_ = c.MarkFlagRequired("pkg")
 	return c
 }

@@ -15,7 +15,10 @@ func newRunCmd() *cobra.Command {
 		Use:   "run --pkg <pattern> --dir <repo>",
 		Short: "Capture, diagnose, apply, re-measure, and judge",
 		Long: "Runs the whole loop and reports whether the change survived " +
-			"measurement.\n\nThe suggestion branch is kept whatever the verdict, and " +
+			"measurement.\n\nThe objective is chosen with --profile and --unit and is " +
+			"pushed into every stage, so the profile that is read, the patch that is " +
+			"asked for, and the metric that decides are all the same one.\n\n" +
+			"The suggestion branch is kept whatever the verdict, and " +
 			"the repository is left on the branch you started from. Progress goes to " +
 			"stderr; the full record — every intermediate artifact — goes to stdout " +
 			"as JSON, so a disappointing verdict can be investigated without " +
@@ -25,11 +28,6 @@ func newRunCmd() *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts.Progress = cmd.ErrOrStderr()
-			// The target repo is one thing to the user but three flags
-			// internally; keep them in sync here rather than making the
-			// user pass --dir twice.
-			opts.Apply.Dir = opts.Capture.Dir
-
 			res, runErr := pipeline.Run(cmd.Context(), analyze.NewClient(), opts)
 			// Emitted even on failure: the partial record names which step
 			// broke and holds everything captured up to that point.
@@ -57,6 +55,7 @@ func newRunCmd() *cobra.Command {
 	f.StringVar(&opts.Analyze.Model, "model", analyze.DefaultModel, "model id")
 	f.StringVar(&opts.Analyze.Module, "module", "", "target module path, for diff paths")
 	f.Float64Var(&opts.Verify.Alpha, "alpha", 0.05, "significance level")
+	measurementFlags(c, &opts.Profile, &opts.Unit)
 	_ = c.MarkFlagRequired("pkg")
 	return c
 }

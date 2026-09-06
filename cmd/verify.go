@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/joaolaureano/profadvisor/internal/measurement"
 	"github.com/joaolaureano/profadvisor/internal/schema"
 	"github.com/joaolaureano/profadvisor/internal/verify"
 	"github.com/spf13/cobra"
@@ -11,20 +12,30 @@ import (
 func newVerifyCmd() *cobra.Command {
 	var (
 		opts            verify.Options
+		profile         measurement.Kind
+		unit            string
 		baseline, after string
 	)
 	c := &cobra.Command{
 		Use:   "verify --baseline <bench.txt> --after <bench.txt>",
-		Short: "Decide whether a change actually made things faster",
-		Long: "Compares two `go test -bench` outputs and returns MELHOROU, " +
-			"SEM DIFERENÇA, or PIOROU per benchmark, with the percentage delta and " +
-			"a p-value.\n\nThe inputs are benchmark output, not profiles: a p-value " +
-			"needs N samples of ns/op, and a profile says where time went, not how " +
-			"long the operation took. Capture both sides with --count 10 or higher.\n\n" +
-			"Exit code is 0 for MELHOROU and SEM DIFERENÇA, 2 for PIOROU, so a CI " +
-			"job can gate on it.",
+		Short: "Decide whether a change actually improved the objective",
+		Long: "Compares two `go test -bench -benchmem` outputs and returns MELHOROU, " +
+			"SEM DIFERENÇA, or PIOROU per benchmark and metric, with the percentage " +
+			"delta and a p-value.\n\nThe verdict is decided by the objective chosen " +
+			"with --unit, and by its guards: a memory objective is guarded by ns/op, " +
+			"so a patch that saves bytes and costs time is PIOROU. Every other metric " +
+			"is reported and votes on nothing.\n\nThe inputs are benchmark output, " +
+			"not profiles: a p-value needs N samples of the metric, and a profile says " +
+			"where the cost went, not how much there was. Capture both sides with " +
+			"--count 10 or higher.\n\nExit code is 0 for MELHOROU and SEM DIFERENÇA, " +
+			"2 for PIOROU, so a CI job can gate on it.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := measurement.Resolve(profile, unit)
+			if err != nil {
+				return err
+			}
+			opts.Measurement = cfg
 			res, err := verify.FromFiles(baseline, after, opts)
 			if err != nil {
 				return err
@@ -42,7 +53,7 @@ func newVerifyCmd() *cobra.Command {
 	f.StringVar(&baseline, "baseline", "", "benchmark output from before the change (required)")
 	f.StringVar(&after, "after", "", "benchmark output from after the change (required)")
 	f.Float64Var(&opts.Alpha, "alpha", 0.05, "significance level")
-	f.StringVar(&opts.Unit, "unit", "ns/op", "metric to compare")
+	measurementFlags(c, &profile, &unit)
 	_ = c.MarkFlagRequired("baseline")
 	_ = c.MarkFlagRequired("after")
 	return c

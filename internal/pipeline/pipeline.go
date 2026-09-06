@@ -17,12 +17,21 @@ import (
 	"github.com/joaolaureano/profadvisor/internal/apply"
 	"github.com/joaolaureano/profadvisor/internal/capture"
 	"github.com/joaolaureano/profadvisor/internal/extract"
+	"github.com/joaolaureano/profadvisor/internal/measurement"
 	"github.com/joaolaureano/profadvisor/internal/schema"
 	"github.com/joaolaureano/profadvisor/internal/verify"
 )
 
 // Options configures one end-to-end run.
+//
+// Profile and Unit are set once, here, and pushed down into every stage. The
+// stages each accept a measurement.Config of their own so they stay usable
+// alone, which means they could in principle disagree; Run rejects that before
+// it captures anything rather than producing a diagnosis about one metric and a
+// verdict about another.
 type Options struct {
+	Profile measurement.Kind
+	Unit    string
 	Capture capture.Options
 	Extract extract.Options
 	Analyze analyze.Options
@@ -37,6 +46,7 @@ type Options struct {
 // disappointing verdict can be investigated without repeating the work.
 type Result struct {
 	SchemaVersion int                   `json:"schema_version"`
+	Measurement   measurement.Config    `json:"measurement"`
 	Baseline      *capture.Result       `json:"baseline"`
 	Hotspots      *schema.ExtractResult `json:"hotspots"`
 	Diagnosis     *schema.Diagnosis     `json:"diagnosis"`
@@ -63,7 +73,13 @@ func Run(ctx context.Context, c analyze.Client, opts Options) (*Result, error) {
 		}
 	}
 
-	step("capturing baseline (%s, %s)", opts.Capture.Pkg, opts.Capture.Bench)
+	cfg, err := resolve(&opts)
+	if err != nil {
+		return res, err
+	}
+	res.Measurement = cfg
+
+	step("capturing baseline: %s %s, objective %s", opts.Capture.Pkg, opts.Capture.Bench, cfg.Unit)
 	baseline, err := capture.Run(ctx, opts.Capture)
 	res.Baseline = baseline
 	if err != nil {
@@ -77,10 +93,11 @@ func Run(ctx context.Context, c analyze.Client, opts Options) (*Result, error) {
 		return res, err
 	}
 	if len(hotspots.Hotspots) == 0 {
-		return res, fmt.Errorf("pipeline: no hotspots survived filtering; is %s CPU-bound?", opts.Capture.Pkg)
+		return res, fmt.Errorf("pipeline: no hotspots survived filtering; does %s spend %s in code you own?",
+			opts.Capture.Pkg, cfg.SampleType)
 	}
-	step("top hotspot: %s (%.1f%% of attributed time)",
-		hotspots.Hotspots[0].Function, hotspots.Hotspots[0].FlatPct)
+	step("top hotspot: %s (%.1f%% of attributed %s)",
+		hotspots.Hotspots[0].Function, hotspots.Hotspots[0].FlatPct, cfg.SampleUnit)
 
 	step("asking %s for a diagnosis", firstNonEmpty(opts.Analyze.Model, analyze.DefaultModel))
 	diagnosis, err := analyze.Run(ctx, c, hotspots, opts.Analyze)
@@ -122,6 +139,57 @@ func Run(ctx context.Context, c analyze.Client, opts Options) (*Result, error) {
 	res.Duration = time.Since(start)
 	step("verdict: %s — branch %s kept for inspection", verification.Verdict, applied.Branch)
 	return res, nil
+}
+
+// resolve settles the objective and pushes it into every stage's options.
+//
+// A stage that was given its own measurement must agree with the run's, and the
+// mismatch is an error rather than a silent overwrite: a caller that set
+// Capture.Profile to something else meant it, and the honest answer is that the
+// two cannot both be true.
+func resolve(opts *Options) (measurement.Config, error) {
+	cfg, err := measurement.Resolve(opts.Profile, opts.Unit)
+	if err != nil {
+		return measurement.Config{}, fmt.Errorf("pipeline: %w", err)
+	}
+	if opts.Capture.Profile != "" && opts.Capture.Profile != cfg.Profile {
+		return measurement.Config{}, fmt.Errorf(
+			"pipeline: run measures %s but capture is configured for %s",
+			cfg.Profile, opts.Capture.Profile)
+	}
+	if opts.Capture.Unit != "" && opts.Capture.Unit != cfg.Unit {
+		return measurement.Config{}, fmt.Errorf(
+			"pipeline: run objective is %s but capture is configured for %s",
+			cfg.Unit, opts.Capture.Unit)
+	}
+	for _, stage := range []struct {
+		name string
+		cfg  measurement.Config
+	}{
+		{"extract", opts.Extract.Measurement},
+		{"verify", opts.Verify.Measurement},
+	} {
+		if (stage.cfg != measurement.Config{}) && stage.cfg != cfg {
+			return measurement.Config{}, fmt.Errorf(
+				"pipeline: run measures %s but %s is configured for %s",
+				cfg.Unit, stage.name, stage.cfg.Unit)
+		}
+	}
+	if opts.Capture.Pkg == "" {
+		return measurement.Config{}, fmt.Errorf("pipeline: --pkg is required")
+	}
+	// The target repository is one thing to the caller but two fields here.
+	// Defaulting it in the pipeline rather than in the CLI matters more than
+	// convenience: a caller that set only Capture.Dir and left Apply.Dir empty
+	// would have git apply a model's patch to the current working directory,
+	// which is whatever process happened to invoke this.
+	if opts.Apply.Dir == "" {
+		opts.Apply.Dir = opts.Capture.Dir
+	}
+	opts.Capture.Profile, opts.Capture.Unit = cfg.Profile, cfg.Unit
+	opts.Extract.Measurement = cfg
+	opts.Verify.Measurement = cfg
+	return cfg, nil
 }
 
 func checkout(ctx context.Context, dir, ref string) error {
