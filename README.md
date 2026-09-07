@@ -1,12 +1,21 @@
 # profadvisor
 
 Finds a hot path in **any** Go package that has benchmarks, asks a language model
-how to fix it, then measures whether the fix actually worked. It optimizes CPU
-time, memory allocation, or contention (block or mutex), chosen per run.
+how to fix it, then measures whether the fix actually worked. It has no target of
+its own and knows nothing about the code it is pointed at: you give it a
+directory and a package pattern, and everything it reports comes from the profile
+and benchmark output of that run.
 
-It has no target of its own and knows nothing about the code it is pointed at:
-you give it a directory and a package pattern, and everything it reports comes
-from the profile and benchmark output of that run.
+## Scope
+
+It answers questions a benchmark can settle, over `go test -bench`: CPU time,
+memory allocation, and contention (block or mutex). Trace profiles are not
+covered. A target that waits on I/O, network, or databases will get a confident
+answer that means nothing.
+
+A verdict comes from measurement, never from the model. `analyze` produces a
+hypothesis; only `verify`, comparing two benchmark outputs, decides whether a
+change was worth making.
 
 ## Install
 
@@ -19,28 +28,72 @@ for the `analyze` step only, an API key for a model provider.
 
 ## Use
 
-`--dir` is the target repository's root; `--pkg` is a package pattern resolved
-inside it.
+Point it at a repository with `--dir` and a package inside it with `--pkg`.
 
 ```
 export PROFADVISOR_API_KEY=...
 
 ./profadvisor run --dir /path/to/your/repo --pkg ./internal/parser/ --bench . --count 10
-
-# optimize allocation instead of time
-./profadvisor run --dir /path/to/your/repo --pkg ./internal/parser/ --profile memory
-
-# optimize for lock contention
-./profadvisor run --dir /path/to/your/repo --pkg ./internal/sync/ --profile mutex
 ```
 
-`run` does capture → extract → analyze → apply → capture and hands you the two
-benchmark outputs; `verify` turns those into a verdict. A suggestion is only a
-success when that second measurement says so — the model's confidence is not
-evidence.
+### The loop
 
-Every command writes JSON to stdout. Add `--format text` to read the same
-document yourself:
+`run` does capture → extract → analyze → apply → capture: it benchmarks the
+package, finds the hot functions, asks a model for a diff, applies it on a
+branch, and benchmarks again. It stops there, deliberately, and hands you the two
+benchmark outputs. Turning them into a verdict is a separate step:
+
+```
+./profadvisor verify --baseline <baseline bench.txt> --after <after bench.txt>
+```
+
+That prints `MELHOROU`, `SEM DIFERENÇA`, or `PIOROU`, with a percentage delta and
+a p-value. A suggestion is only a success when this second measurement says so —
+the model's confidence is not evidence, and a rejected suggestion is a normal
+outcome rather than a malfunction.
+
+### Choosing what to optimize
+
+One flag selects the objective, and it reaches every stage: which pprof sample
+type is read, how the prompt frames the task, and which metric decides the
+verdict.
+
+```
+# CPU time — the default, optimizes ns/op
+./profadvisor run --dir /path/to/your/repo --pkg ./internal/parser/
+
+# allocation — optimizes B/op, or allocs/op with --unit
+./profadvisor run --dir /path/to/your/repo --pkg ./internal/parser/ --profile memory
+
+# lock or channel contention
+./profadvisor run --dir /path/to/your/repo --pkg ./internal/sync/ --profile mutex
+./profadvisor run --dir /path/to/your/repo --pkg ./internal/sync/ --profile block
+```
+
+A memory run keeps `ns/op` as a guard, so a patch that saves bytes by spending
+time is rejected rather than celebrated. Contention runs are judged on `ns/op`
+too: recording every event adds overhead, so absolute numbers from a contention
+capture are not comparable to a clean run — but baseline and after use identical
+flags, so the verdict stays valid.
+
+### Escape analysis, without a benchmark
+
+A narrower question that needs no benchmark, no profile, and no API key: what the
+compiler concluded about which values are heap-allocated.
+
+```
+./profadvisor escape --dir /path/to/your/repo
+```
+
+**The compiler is the source of truth, and an escape is not a defect.** A heap
+allocation on a path that runs once costs nothing measurable. This command
+reports evidence; deciding that code should change still requires the loop above.
+There is no severity, no ranking, and no suggestion in the output, deliberately.
+
+### Reading the output
+
+Every command writes JSON to stdout and diagnostics to stderr. `--format text`
+renders the same document for a person:
 
 ```
 ./profadvisor extract cpu.prof --format text
@@ -62,21 +115,6 @@ document yourself:
 [AGENTS.md](AGENTS.md) is the full reference: every flag, the I/O contract, the
 schema versions, and what each verdict means. Read it before scripting against
 this tool.
-
-## Escape analysis
-
-```
-./profadvisor escape --dir /path/to/your/repo
-```
-
-A separate question that needs no benchmark, no profile, and no API key: what
-the compiler concluded about which values are heap-allocated.
-
-**The compiler is the source of truth, and an escape is not a defect.** A heap
-allocation on a path that runs once costs nothing measurable. This command
-reports evidence; deciding that code should change still requires the loop
-above. There is no severity, no ranking, and no suggestion in the output,
-deliberately.
 
 ## Generating benchmarks
 
@@ -112,50 +150,8 @@ Adding a provider is one file: implement `llm.Client`, call `llm.Register` from
 `init()`, and blank-import it in `internal/llm/providers`.
 
 Every word the tool sends lives in `internal/prompt/prompts.json`, embedded at
-build time. Copy it, edit it, and pass `--prompts <file>` to try different
-wording without rebuilding.
-
-## Scope
-
-CPU, allocation, block-contention, and mutex-contention profiles over
-`go test -bench`. Trace profiles are not covered. A target that waits on I/O,
-network, or databases will get a confident answer that means nothing.
-
-A memory run optimizes `B/op` (or `allocs/op`) and keeps `ns/op` as a guard, so a
-patch that saves bytes by spending time is rejected rather than celebrated.
-Block and mutex runs optimize `ns/op`; recording every contention event adds
-overhead, so absolute values from a contention capture are not comparable to a
-clean run — but baseline and after use identical flags, so the verdict stays
-valid.
-
-## Layout
-
-| Path | What it holds |
-|---|---|
-| `cmd/` | Flag parsing, exit codes, JSON on stdout. No logic. |
-| `internal/measurement/` | What a run optimizes: sample type, attribution, metric roles. |
-| `internal/benchmark/` | One `go test -bench` invocation. Process handling only. |
-| `internal/capture/` | Keeps the profile and `bench.txt` from one run. |
-| `internal/extract/` | Ranks hot functions, filters runtime noise, attaches source. |
-| `internal/analyze/` | Builds the request and reads the answer. Names no vendor. |
-| `internal/prompt/` | Every prompt the tool sends, as one validated JSON catalog. |
-| `internal/llm/` | Neutral model client; one adapter subpackage per provider. |
-| `internal/apply/` | Applies the diff on a branch. Refuses a dirty tree; rolls back. |
-| `internal/verify/` | benchfmt + benchmath. The only place a verdict is reached. |
-| `internal/benchgen/` | Generates fuzz tests and benchmarks from a frozen corpus. |
-| `internal/render/` | Documents and values as readable text, for `--format text` and for prompts. |
-| `internal/escape/` | Parses the compiler's escape diagnostics. The only place their wording lives. |
-| `internal/toolchain/` | Finds the Go toolchain that will compile the target, and runs it. |
-| `internal/proc/` | Process-group handling for the packages that shell out to `go`. |
-| `internal/pipeline/` | Runs the five stages in order. Produces artifacts; judges nothing. |
-| `internal/schema/` | The JSON contract between subcommands. |
-| `internal/fixture/` | Loads the recorded profiles under `testdata/` for tests. |
-| `testdata/fixture/` | A small Go module whose benchmarks produce those profiles. |
-| `testdata/escape/` | A corpus module and the recorded compiler output the parser is tested on. |
-| `testdata/prompts/` | Golden files pinning the exact bytes sent for each objective. |
-
-`internal/*` never prints and never exits; it returns values and errors. That is
-what makes each step testable without a process.
+build time. Copy it, edit it, and pass `--prompts <file>` to try different wording
+without rebuilding.
 
 ## Testing
 
