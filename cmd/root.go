@@ -33,7 +33,7 @@ func newRootCmd() *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.AddCommand(newCaptureCmd(), newExtractCmd(), newAnalyzeCmd(),
-		newApplyCmd(), newVerifyCmd(), newRunCmd())
+		newApplyCmd(), newVerifyCmd(), newRunCmd(), newEscapeCmd())
 	return root
 }
 

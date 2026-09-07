@@ -1,0 +1,450 @@
+{
+  "Findings": [
+    {
+      "kind": "leaking_param_result",
+      "package": "example.com/escapecorpus",
+      "file": "append.go",
+      "line": 4,
+      "column": 18,
+      "subject": "s",
+      "function": "appendGrows",
+      "target": "~r0",
+      "level": 0,
+      "flow": [
+        {
+          "text": "{temp} ← s:"
+        },
+        {
+          "text": "append(s, 42)",
+          "reason": "call parameter",
+          "file": "append.go",
+          "line": 5,
+          "column": 15
+        },
+        {
+          "text": "~r0 ← {temp}:"
+        },
+        {
+          "text": "return append(s, 42)",
+          "reason": "return",
+          "file": "append.go",
+          "line": 5,
+          "column": 2
+        }
+      ],
+      "evidence": "./append.go:4:18: leaking param: s to result ~r0 level=0"
+    },
+    {
+      "kind": "mutates_param",
+      "package": "example.com/escapecorpus",
+      "file": "append.go",
+      "line": 4,
+      "column": 18,
+      "subject": "s",
+      "derefs": 0,
+      "evidence": "./append.go:4:18: mutates param: s derefs=0"
+    },
+    {
+      "kind": "escapes_to_heap",
+      "package": "example.com/escapecorpus",
+      "file": "append.go",
+      "line": 5,
+      "column": 15,
+      "subject": "append",
+      "function": "appendGrows",
+      "flow": [
+        {
+          "text": "~r0 ← \u0026{storage for append(s, 42)}:"
+        },
+        {
+          "text": "append(s, 42)",
+          "reason": "spill",
+          "file": "append.go",
+          "line": 5,
+          "column": 15
+        },
+        {
+          "text": "return append(s, 42)",
+          "reason": "return",
+          "file": "append.go",
+          "line": 5,
+          "column": 2
+        }
+      ],
+      "evidence": "./append.go:5:15: append escapes to heap"
+    },
+    {
+      "kind": "closure_capture",
+      "package": "example.com/escapecorpus",
+      "file": "closure.go",
+      "line": 5,
+      "column": 2,
+      "subject": "n",
+      "function": "closureByRef",
+      "by_ref": true,
+      "evidence": "./closure.go:5:2: closureByRef capturing by ref: n (addr=false assign=true width=8)"
+    },
+    {
+      "kind": "moved_to_heap",
+      "package": "example.com/escapecorpus",
+      "file": "closure.go",
+      "line": 5,
+      "column": 2,
+      "subject": "n",
+      "function": "closureByRef",
+      "flow": [
+        {
+          "text": "{storage for func literal} ← \u0026n:"
+        },
+        {
+          "text": "n",
+          "reason": "captured by a closure",
+          "file": "closure.go",
+          "line": 7,
+          "column": 3
+        },
+        {
+          "text": "n",
+          "reason": "reference",
+          "file": "closure.go",
+          "line": 7,
+          "column": 3
+        }
+      ],
+      "evidence": "./closure.go:5:2: moved to heap: n"
+    },
+    {
+      "kind": "escapes_to_heap",
+      "package": "example.com/escapecorpus",
+      "file": "closure.go",
+      "line": 6,
+      "column": 9,
+      "subject": "func literal",
+      "function": "closureByRef",
+      "flow": [
+        {
+          "text": "~r0 ← \u0026{storage for func literal}:"
+        },
+        {
+          "text": "func literal",
+          "reason": "spill",
+          "file": "closure.go",
+          "line": 6,
+          "column": 9
+        },
+        {
+          "text": "return func literal",
+          "reason": "return",
+          "file": "closure.go",
+          "line": 6,
+          "column": 2
+        }
+      ],
+      "evidence": "./closure.go:6:9: func literal escapes to heap"
+    },
+    {
+      "kind": "moved_to_heap",
+      "package": "example.com/escapecorpus",
+      "file": "heap.go",
+      "line": 5,
+      "column": 2,
+      "subject": "x",
+      "function": "allocHeap",
+      "flow": [
+        {
+          "text": "~r0 ← \u0026x:"
+        },
+        {
+          "text": "\u0026x",
+          "reason": "address-of",
+          "file": "heap.go",
+          "line": 6,
+          "column": 9
+        },
+        {
+          "text": "return \u0026x",
+          "reason": "return",
+          "file": "heap.go",
+          "line": 6,
+          "column": 2
+        }
+      ],
+      "evidence": "./heap.go:5:2: moved to heap: x"
+    },
+    {
+      "kind": "escapes_to_heap",
+      "package": "example.com/escapecorpus",
+      "file": "heap.go",
+      "line": 11,
+      "column": 13,
+      "subject": "make([]int, n)",
+      "function": "sliceHeap",
+      "flow": [
+        {
+          "text": "~r0 ← \u0026{storage for make([]int, n)}:"
+        },
+        {
+          "text": "make([]int, n)",
+          "reason": "spill",
+          "file": "heap.go",
+          "line": 11,
+          "column": 13
+        },
+        {
+          "text": "return make([]int, n)",
+          "reason": "return",
+          "file": "heap.go",
+          "line": 11,
+          "column": 2
+        }
+      ],
+      "evidence": "./heap.go:11:13: make([]int, n) escapes to heap"
+    },
+    {
+      "kind": "does_not_escape",
+      "package": "example.com/escapecorpus",
+      "file": "iface.go",
+      "line": 7,
+      "column": 20,
+      "subject": "... argument",
+      "evidence": "./iface.go:7:20: ... argument does not escape"
+    },
+    {
+      "kind": "escapes_to_heap",
+      "package": "example.com/escapecorpus",
+      "file": "iface.go",
+      "line": 7,
+      "column": 27,
+      "subject": "x",
+      "function": "ifaceEscapes",
+      "flow": [
+        {
+          "text": "{storage for ... argument} ← \u0026{storage for x}:"
+        },
+        {
+          "text": "x",
+          "reason": "spill",
+          "file": "iface.go",
+          "line": 7,
+          "column": 27
+        },
+        {
+          "text": "... argument",
+          "reason": "slice-literal-element",
+          "file": "iface.go",
+          "line": 7,
+          "column": 20
+        },
+        {
+          "text": "{heap} ← {storage for ... argument}:"
+        },
+        {
+          "text": "... argument",
+          "reason": "spill",
+          "file": "iface.go",
+          "line": 7,
+          "column": 20
+        },
+        {
+          "text": "fmt.Sprintf(\"%v\", ... argument...)",
+          "reason": "call parameter",
+          "file": "iface.go",
+          "line": 7,
+          "column": 20
+        }
+      ],
+      "evidence": "./iface.go:7:27: x escapes to heap"
+    },
+    {
+      "kind": "leaking_param_result",
+      "package": "example.com/escapecorpus",
+      "file": "params.go",
+      "line": 6,
+      "column": 19,
+      "subject": "p",
+      "function": "leakToResult",
+      "target": "~r0",
+      "level": 0,
+      "flow": [
+        {
+          "text": "~r0 ← p:"
+        },
+        {
+          "text": "return p",
+          "reason": "return",
+          "file": "params.go",
+          "line": 7,
+          "column": 2
+        }
+      ],
+      "evidence": "./params.go:6:19: leaking param: p to result ~r0 level=0"
+    },
+    {
+      "kind": "leaking_param",
+      "package": "example.com/escapecorpus",
+      "file": "params.go",
+      "line": 11,
+      "column": 17,
+      "subject": "p",
+      "function": "leakToHeap",
+      "flow": [
+        {
+          "text": "{heap} ← p:"
+        },
+        {
+          "text": "globalPtr = p",
+          "reason": "assign",
+          "file": "params.go",
+          "line": 12,
+          "column": 12
+        }
+      ],
+      "evidence": "./params.go:11:17: leaking param: p"
+    },
+    {
+      "kind": "param_inert",
+      "package": "example.com/escapecorpus",
+      "file": "params.go",
+      "line": 16,
+      "column": 15,
+      "subject": "p",
+      "evidence": "./params.go:16:15: p does not escape, mutate, or call"
+    },
+    {
+      "kind": "param_inert",
+      "package": "example.com/escapecorpus",
+      "file": "params.go",
+      "line": 23,
+      "column": 18,
+      "subject": "p",
+      "evidence": "./params.go:23:18: p does not escape, mutate, or call"
+    },
+    {
+      "kind": "escapes_to_heap",
+      "package": "example.com/escapecorpus",
+      "file": "params.go",
+      "line": 24,
+      "column": 22,
+      "subject": "append",
+      "function": "leakContent",
+      "flow": [
+        {
+          "text": "{heap} ← \u0026{storage for append(globalSlice, *p...)}:"
+        },
+        {
+          "text": "append(globalSlice, *p...)",
+          "reason": "spill",
+          "file": "params.go",
+          "line": 24,
+          "column": 22
+        },
+        {
+          "text": "globalSlice = append(globalSlice, *p...)",
+          "reason": "assign",
+          "file": "params.go",
+          "line": 24,
+          "column": 14
+        }
+      ],
+      "evidence": "./params.go:24:22: append escapes to heap"
+    },
+    {
+      "kind": "leaking_param_content",
+      "package": "example.com/escapecorpus",
+      "file": "params.go",
+      "line": 30,
+      "column": 24,
+      "subject": "p",
+      "function": "leakContentDirect",
+      "flow": [
+        {
+          "text": "{heap} ← **p:"
+        },
+        {
+          "text": "*p",
+          "reason": "indirection",
+          "file": "params.go",
+          "line": 32,
+          "column": 16
+        },
+        {
+          "text": "(*p)[0]",
+          "reason": "dot of pointer",
+          "file": "params.go",
+          "line": 32,
+          "column": 19
+        },
+        {
+          "text": "globalInt = (*p)[0]",
+          "reason": "assign",
+          "file": "params.go",
+          "line": 32,
+          "column": 13
+        }
+      ],
+      "evidence": "./params.go:30:24: leaking param content: p"
+    },
+    {
+      "kind": "param_inert",
+      "package": "example.com/escapecorpus",
+      "file": "params.go",
+      "line": 37,
+      "column": 13,
+      "subject": "p",
+      "evidence": "./params.go:37:13: p does not escape, mutate, or call"
+    },
+    {
+      "kind": "param_inert",
+      "package": "example.com/escapecorpus",
+      "file": "params.go",
+      "line": 42,
+      "column": 12,
+      "subject": "p",
+      "evidence": "./params.go:42:12: p does not escape, mutate, or call"
+    },
+    {
+      "kind": "param_inert",
+      "package": "example.com/escapecorpus",
+      "file": "params.go",
+      "line": 47,
+      "column": 21,
+      "subject": "fn",
+      "evidence": "./params.go:47:21: fn does not escape, mutate, or call"
+    },
+    {
+      "kind": "param_inert",
+      "package": "example.com/escapecorpus",
+      "file": "params.go",
+      "line": 52,
+      "column": 20,
+      "subject": "p",
+      "evidence": "./params.go:52:20: p does not escape, mutate, or call"
+    },
+    {
+      "kind": "does_not_escape",
+      "package": "example.com/escapecorpus",
+      "file": "stack.go",
+      "line": 15,
+      "column": 11,
+      "subject": "make([]int, 10)",
+      "evidence": "./stack.go:15:11: make([]int, 10) does not escape"
+    }
+  ],
+  "Unrecognized": null,
+  "Profile": "go1.20+",
+  "Warnings": [],
+  "Total": 87,
+  "Recognized": 21,
+  "Ignored": 66,
+  "Packages": [
+    "example.com/escapecorpus"
+  ],
+  "Files": [
+    "append.go",
+    "closure.go",
+    "heap.go",
+    "iface.go",
+    "params.go",
+    "stack.go"
+  ]
+}

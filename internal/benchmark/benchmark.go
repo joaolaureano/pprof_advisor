@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/joaolaureano/profadvisor/internal/proc"
 	"golang.org/x/perf/benchfmt"
 )
 
@@ -64,7 +65,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	res := &Result{Command: append([]string{"go"}, args...)}
 	var output bytes.Buffer
 	cmd := exec.CommandContext(ctx, "go", args...)
-	configureProcess(cmd)
+	proc.Configure(cmd)
 	// go test launches a separate test binary. WaitDelay bounds how long the
 	// parent waits if cancellation races with that child shutting down.
 	cmd.WaitDelay = 2 * time.Second

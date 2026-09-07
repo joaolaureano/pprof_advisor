@@ -1,0 +1,86 @@
+# example.com/escapecorpus
+./append.go:4:6: can inline appendGrows with cost 4 as: func([]int) []int { return append(s, 42) }
+./closure.go:4:6: can inline closureByRef with cost 22 as: func() func() int { n := 42; return func literal }
+./closure.go:6:9: can inline closureByRef.func1 with cost 5 as: func() int { n++; return n }
+./heap.go:4:6: can inline allocHeap with cost 8 as: func() *int { x := 42; return &x }
+./heap.go:10:6: can inline sliceHeap with cost 3 as: func(int) []int { return make([]int, n) }
+./iface.go:6:6: can inline ifaceEscapes with cost 65 as: func(int) string { return fmt.Sprintf("%v", ... argument...) }
+./params.go:6:6: can inline leakToResult with cost 2 as: func(*int) *int { return p }
+./params.go:11:6: can inline leakToHeap with cost 3 as: func(*int) { globalPtr = p }
+./params.go:16:6: can inline readOnly with cost 3 as: func(*int) int { return *p }
+./params.go:23:6: can inline leakContent with cost 6 as: func(*[]int) { globalSlice = append(globalSlice, *p...) }
+./params.go:30:6: can inline leakContentDirect with cost 12 as: func(*[]*int) { if len(*p) > 0 { globalInt = (*p)[0] } }
+./params.go:37:6: can inline unused with cost 0 as: func(*int) {  }
+./params.go:42:6: can inline inert with cost 0 as: func(interface {}) {  }
+./params.go:47:6: can inline funcParamInert with cost 0 as: func(func()) {  }
+./params.go:52:6: can inline ptrParamInert with cost 3 as: func(*struct {}) { _ = p }
+./stack.go:4:6: can inline localStruct with cost 12 as: func() int { s := S{...}; return s.a }
+./stack.go:14:6: can inline localSlice with cost 15 as: func() int { s := make([]int, 10); s[0] = 42; return s[0] }
+./stack.go:21:6: can inline localArray with cost 14 as: func() int { arr := [5]int{...}; return arr[0] }
+./append.go:5:15: append(s, 42) escapes to heap in appendGrows:
+./append.go:5:15:   flow: ~r0 ← &{storage for append(s, 42)}:
+./append.go:5:15:     from append(s, 42) (spill) at ./append.go:5:15
+./append.go:5:15:     from return append(s, 42) (return) at ./append.go:5:2
+./append.go:4:18: parameter s leaks to ~r0 for appendGrows with derefs=0:
+./append.go:4:18:   flow: {temp} ← s:
+./append.go:4:18:     from append(s, 42) (call parameter) at ./append.go:5:15
+./append.go:4:18:   flow: ~r0 ← {temp}:
+./append.go:4:18:     from return append(s, 42) (return) at ./append.go:5:2
+./append.go:4:18: leaking param: s to result ~r0 level=0
+./append.go:5:15: append escapes to heap
+./closure.go:5:2: closureByRef capturing by ref: n (addr=false assign=true width=8)
+./closure.go:6:9: func literal escapes to heap in closureByRef:
+./closure.go:6:9:   flow: ~r0 ← &{storage for func literal}:
+./closure.go:6:9:     from func literal (spill) at ./closure.go:6:9
+./closure.go:6:9:     from return func literal (return) at ./closure.go:6:2
+./closure.go:5:2: n escapes to heap in closureByRef:
+./closure.go:5:2:   flow: {storage for func literal} ← &n:
+./closure.go:5:2:     from n (captured by a closure) at ./closure.go:7:3
+./closure.go:5:2:     from n (reference) at ./closure.go:7:3
+./closure.go:5:2: moved to heap: n
+./closure.go:6:9: func literal escapes to heap
+./heap.go:5:2: x escapes to heap in allocHeap:
+./heap.go:5:2:   flow: ~r0 ← &x:
+./heap.go:5:2:     from &x (address-of) at ./heap.go:6:9
+./heap.go:5:2:     from return &x (return) at ./heap.go:6:2
+./heap.go:5:2: moved to heap: x
+./heap.go:11:13: make([]int, n) escapes to heap in sliceHeap:
+./heap.go:11:13:   flow: ~r0 ← &{storage for make([]int, n)}:
+./heap.go:11:13:     from make([]int, n) (spill) at ./heap.go:11:13
+./heap.go:11:13:     from return make([]int, n) (return) at ./heap.go:11:2
+./heap.go:11:13: make([]int, n) escapes to heap
+./iface.go:7:27: x escapes to heap in ifaceEscapes:
+./iface.go:7:27:   flow: {storage for ... argument} ← &{storage for x}:
+./iface.go:7:27:     from x (spill) at ./iface.go:7:27
+./iface.go:7:27:     from ... argument (slice-literal-element) at ./iface.go:7:20
+./iface.go:7:27:   flow: {heap} ← {storage for ... argument}:
+./iface.go:7:27:     from ... argument (spill) at ./iface.go:7:20
+./iface.go:7:27:     from fmt.Sprintf("%v", ... argument...) (call parameter) at ./iface.go:7:20
+./iface.go:7:20: ... argument does not escape
+./iface.go:7:27: x escapes to heap
+./params.go:6:19: parameter p leaks to ~r0 for leakToResult with derefs=0:
+./params.go:6:19:   flow: ~r0 ← p:
+./params.go:6:19:     from return p (return) at ./params.go:7:2
+./params.go:6:19: leaking param: p to result ~r0 level=0
+./params.go:11:17: parameter p leaks to {heap} for leakToHeap with derefs=0:
+./params.go:11:17:   flow: {heap} ← p:
+./params.go:11:17:     from globalPtr = p (assign) at ./params.go:12:12
+./params.go:11:17: leaking param: p
+./params.go:16:15: p does not escape
+./params.go:24:22: append(globalSlice, *p...) escapes to heap in leakContent:
+./params.go:24:22:   flow: {heap} ← &{storage for append(globalSlice, *p...)}:
+./params.go:24:22:     from append(globalSlice, *p...) (spill) at ./params.go:24:22
+./params.go:24:22:     from globalSlice = append(globalSlice, *p...) (assign) at ./params.go:24:14
+./params.go:23:18: p does not escape
+./params.go:24:22: append escapes to heap
+./params.go:30:24: parameter p leaks to {heap} for leakContentDirect with derefs=2:
+./params.go:30:24:   flow: {heap} ← **p:
+./params.go:30:24:     from *p (indirection) at ./params.go:32:16
+./params.go:30:24:     from (*p)[0] (dot of pointer) at ./params.go:32:19
+./params.go:30:24:     from globalInt = (*p)[0] (assign) at ./params.go:32:13
+./params.go:30:24: leaking param content: p
+./params.go:37:13: p does not escape
+./params.go:42:12: p does not escape
+./params.go:47:21: fn does not escape
+./params.go:52:20: p does not escape
+./stack.go:15:11: make([]int, 10) does not escape

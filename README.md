@@ -72,6 +72,37 @@ To try different wording without rebuilding, copy the file, edit it, and pass
 golden files under `testdata/prompts/`; `go test ./internal/analyze -update`
 regenerates them, and the diff is the review.
 
+## Escape analysis
+
+A separate question, answered by a separate command:
+
+```
+./profadvisor escape --dir /path/to/your/repo
+```
+
+This one needs no benchmark, no profile, and no API key. It compiles the target
+with the compiler's own escape analysis turned on and reports what the compiler
+concluded — which values are heap-allocated, which stay on the stack, which
+parameters outlive their call.
+
+**The compiler is the source of truth and an escape is not a defect.** A heap
+allocation on a path that runs once costs nothing measurable. This command
+reports evidence; deciding that code should change still requires the loop
+above. There is no severity, no ranking, and no suggestion anywhere in the
+output, deliberately.
+
+Compiler diagnostic text is prose, not an API — it has been reworded across
+releases and will be again. So it is parsed once, at a boundary, into a stable
+vocabulary: a finding carries a `kind` such as `moved_to_heap` or
+`leaking_param_result`, and the compiler's original line beside it as
+`evidence`. Nothing downstream ever matches on the wording. The exact toolchain
+that reached the conclusion is recorded too, because the same source can
+legitimately get a different answer from a different compiler.
+
+A diagnostic the parser does not recognize is never guessed at. It is preserved
+verbatim under `unrecognized` and counted, so a toolchain that has learned a new
+sentence is visible rather than silently dropped.
+
 ## Scope
 
 CPU and allocation profiles over `go test -bench`. Block, mutex, and trace
@@ -95,10 +126,14 @@ a patch that saves bytes by spending time is rejected rather than celebrated.
 | `internal/llm/` | Neutral model client; one adapter subpackage per provider. |
 | `internal/apply/` | Applies the diff on a branch. Refuses a dirty tree; rolls back. |
 | `internal/verify/` | benchfmt + benchmath. Returns MELHOROU / SEM DIFERENÇA / PIOROU. |
+| `internal/escape/` | Parses the compiler's escape diagnostics. The only place their wording lives. |
+| `internal/toolchain/` | Finds the Go toolchain that will compile the target, and runs it. |
+| `internal/proc/` | Process-group handling for the packages that shell out to `go`. |
 | `internal/pipeline/` | Runs the five in order and decides what the result means. |
 | `internal/schema/` | The JSON contract between subcommands. |
 | `internal/fixture/` | Loads the recorded profiles under `testdata/` for tests. |
 | `testdata/fixture/` | A small Go module whose benchmarks produce those profiles. |
+| `testdata/escape/` | A corpus module and the recorded compiler output the parser is tested on. |
 
 `internal/*` never prints and never exits; it returns values and errors. That is
 what makes each step testable without a process.
@@ -114,3 +149,10 @@ deliberately slow path matcher, and the committed profiles and benchmark output
 were recorded from its benchmarks. The end-to-end tests run the real loop
 against that module and against a temporary git repository the test creates,
 so nothing outside this checkout is needed and no API key is used.
+
+`testdata/escape/` works the same way for the escape parser: a corpus module of
+small functions, each written to make the compiler reach one particular
+conclusion, plus that compiler's recorded output. The parser tests run against
+the recording and need no toolchain; one further test runs the real compiler and
+compares. After a Go upgrade, that comparison is what tells you the wording
+moved — re-record with `go test ./internal/escape -update` and read the diff.

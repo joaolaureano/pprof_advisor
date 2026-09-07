@@ -97,3 +97,48 @@ func TestExtractCLIEmitsV3CPU(t *testing.T) {
 		}
 	}
 }
+
+func TestEscapeCLI(t *testing.T) {
+	corpusPath := filepath.Join("..", "testdata", "escape", "corpus")
+	code, out, diagnostics := invoke("escape", "--dir", corpusPath)
+	if code != 0 {
+		t.Fatalf("exit=%d %s", code, diagnostics)
+	}
+	var res schema.EscapeReport
+	if err := json.Unmarshal([]byte(out), &res); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v\n%s", err, out)
+	}
+	if res.SchemaVersion != 1 {
+		t.Errorf("SchemaVersion: got %d, want 1", res.SchemaVersion)
+	}
+	if res.Toolchain.Version == "" {
+		t.Error("Toolchain.Version is empty")
+	}
+	if len(res.Findings) == 0 {
+		t.Fatal("no findings")
+	}
+
+	// Boundary assertion: compiler phrases must appear only in Evidence.
+	compilerPhrases := []string{
+		"escapes to heap",
+		"does not escape",
+		"moved to heap",
+		"leaking param",
+	}
+	for _, finding := range res.Findings {
+		for _, phrase := range compilerPhrases {
+			if strings.Contains(string(finding.Kind), phrase) {
+				t.Errorf("Found %q in Kind: %s", phrase, finding.Kind)
+			}
+			if strings.Contains(finding.Subject, phrase) {
+				t.Errorf("Found %q in Subject: %s", phrase, finding.Subject)
+			}
+			if strings.Contains(finding.Function, phrase) {
+				t.Errorf("Found %q in Function: %s", phrase, finding.Function)
+			}
+			if strings.Contains(finding.Target, phrase) {
+				t.Errorf("Found %q in Target: %s", phrase, finding.Target)
+			}
+		}
+	}
+}

@@ -205,3 +205,192 @@ type BenchComparison struct {
 	Significant bool    `json:"significant"`
 	Verdict     string  `json:"verdict"`
 }
+
+// ---------------------------------------------------------------------------
+// escape
+// ---------------------------------------------------------------------------
+
+// EscapeVersion is the schema version of the escape report.
+//
+// It is deliberately a separate constant from Version. The capture → extract →
+// analyze → apply → verify documents are links in one chain: they are produced
+// by one run, passed hand to hand, and they move together. The escape report is
+// not in that chain. It has its own reason to change — the Go compiler's
+// diagnostic vocabulary — and tying the two would force a version bump on five
+// documents every time the toolchain rewords one line.
+const EscapeVersion = 1
+
+// EscapeKind is the stable name for what the compiler concluded.
+//
+// These are profadvisor's words, not the compiler's. Compiler diagnostic text is
+// prose, not an API: it has been reworded across releases and will be again, and
+// a consumer that greps for a phrase breaks on a toolchain upgrade. Every kind
+// here maps one-to-one onto a single compiler message template, so the mapping is
+// a translation and never an interpretation — which is why two conclusions the
+// compiler states separately stay separate here even when they mean the same
+// thing to a reader.
+//
+// Nothing outside internal/escape sees the original wording except through
+// EscapeFinding.Evidence.
+type EscapeKind string
+
+const (
+	// EscapeMovedToHeap is a named local variable the compiler had to heap
+	// allocate. EscapeEscapesToHeap is the same conclusion about an expression
+	// with no name. The compiler distinguishes them and so does this.
+	EscapeMovedToHeap   EscapeKind = "moved_to_heap"
+	EscapeEscapesToHeap EscapeKind = "escapes_to_heap"
+	// EscapeDoesNotEscape covers both an expression that stayed on the stack and
+	// a parameter that does not outlive its call. The compiler prints the same
+	// sentence for both and the text does not say which, so neither does this.
+	EscapeDoesNotEscape EscapeKind = "does_not_escape"
+	// The leaking-param family: the parameter itself outlives the call, its
+	// pointed-to content does, or it reaches a named result.
+	EscapeLeakingParam        EscapeKind = "leaking_param"
+	EscapeLeakingParamContent EscapeKind = "leaking_param_content"
+	EscapeLeakingParamResult  EscapeKind = "leaking_param_result"
+	// EscapeParamInert is a parameter the callee neither retains, writes
+	// through, nor calls.
+	EscapeParamInert   EscapeKind = "param_inert"
+	EscapeMutatesParam EscapeKind = "mutates_param"
+	EscapeCallsParam   EscapeKind = "calls_param"
+	// EscapeUnsafeUintptr is the compiler declining to reason about a pointer
+	// laundered through uintptr. It is evidence that the analysis stopped, not
+	// evidence about the value.
+	EscapeUnsafeUintptr      EscapeKind = "unsafe_uintptr"
+	EscapeZeroCopyConversion EscapeKind = "zero_copy_conversion"
+	EscapeClosureCapture     EscapeKind = "closure_capture"
+	EscapeSelfAssignment     EscapeKind = "self_assignment"
+)
+
+// EscapeReport is what `profadvisor escape` writes to stdout.
+//
+// It reports what the compiler concluded and nothing more. An escape is not
+// automatically a cost: a heap allocation on a path that runs once is invisible,
+// and the compiler is answering "where does this value live", not "is this code
+// too slow". There is deliberately no severity, no ranking, and no suggestion
+// anywhere in this document — deciding that code should change requires a
+// measurement, which is what the rest of this tool is for.
+type EscapeReport struct {
+	SchemaVersion int             `json:"schema_version"`
+	Toolchain     Toolchain       `json:"toolchain"`
+	Analysis      EscapeAnalysis  `json:"analysis"`
+	Summary       EscapeSummary   `json:"summary"`
+	Findings      []EscapeFinding `json:"findings"`
+	// Unrecognized holds every diagnostic line the parser could not map to a
+	// kind, verbatim. A compiler that has learned a new sentence must show up
+	// here rather than be silently dropped or forced into the nearest kind: a
+	// wrong classification is worse than an admitted gap, because only one of
+	// them is visible.
+	Unrecognized []RawDiagnostic `json:"unrecognized,omitempty"`
+	Warnings     []string        `json:"warnings,omitempty"`
+}
+
+// Toolchain records the compiler that produced the diagnostics.
+//
+// A finding is only meaningful beside the toolchain that reached it. Escape
+// analysis improves between releases, and the same source can legitimately give
+// a different answer on a different version or architecture; a report that does
+// not say which compiler spoke cannot be reproduced or trusted later.
+type Toolchain struct {
+	// Path is the go binary actually used, resolved absolutely. Which `go` is on
+	// PATH is not always the one a reader assumes.
+	Path string `json:"path"`
+	// Version is GOVERSION as reported from inside the target directory, so a
+	// go.mod toolchain directive is reflected rather than overlooked.
+	Version string `json:"version"`
+	Raw     string `json:"version_raw"`
+	GOOS    string `json:"goos"`
+	GOARCH  string `json:"goarch"`
+}
+
+// EscapeAnalysis records how the diagnostics were obtained, so the run can be
+// reproduced by hand, and how much of the output the parser actually understood,
+// so a reader can tell a quiet report from a blind one.
+type EscapeAnalysis struct {
+	Dir      string   `json:"dir"`
+	Patterns []string `json:"patterns"`
+	Command  []string `json:"command"`
+	// ParserProfile names the ruleset that read this output. It moves when the
+	// compiler's wording does, and it is what makes an old report legible after
+	// the parser has changed underneath it.
+	ParserProfile string `json:"parser_profile"`
+	TotalLines    int    `json:"total_lines"`
+	// RecognizedLines became findings. IgnoredLines were understood and
+	// deliberately not reported — package headers, inlining decisions, and the
+	// explanation headings already folded into a finding. UnrecognizedLines is
+	// the gap, and it is the number worth watching after a toolchain upgrade.
+	RecognizedLines   int   `json:"recognized_lines"`
+	IgnoredLines      int   `json:"ignored_lines"`
+	UnrecognizedLines int   `json:"unrecognized_lines"`
+	DurationNanos     int64 `json:"duration_nanos"`
+}
+
+// EscapeSummary counts what was found. It is a tally, not a judgement: the
+// counts say how often the compiler reached each conclusion, and say nothing
+// about whether any of it matters.
+type EscapeSummary struct {
+	Packages int `json:"packages"`
+	Files    int `json:"files"`
+	Findings int `json:"findings"`
+	// ByKind is keyed by EscapeKind.
+	ByKind map[string]int `json:"by_kind"`
+}
+
+// EscapeFinding is one conclusion the compiler reached, at one position.
+type EscapeFinding struct {
+	Kind    EscapeKind `json:"kind"`
+	Package string     `json:"package"`
+	File    string     `json:"file"`
+	Line    int        `json:"line"`
+	Column  int        `json:"column"`
+	// Subject is the expression or identifier the compiler named, verbatim and
+	// unparsed — "&T{...}", "ts", "p". These are Go source fragments as the
+	// compiler chose to print them, not identifiers this tool can resolve, and
+	// treating them as anything more structured than a label is a mistake.
+	Subject string `json:"subject"`
+	// Function is the enclosing function, known only when the compiler printed
+	// an explanation block for this finding, which it does only at -m=2 and only
+	// for some kinds.
+	Function string `json:"function,omitempty"`
+	// Target is where the value went, for the leaking-to-result kind: a result
+	// name such as "~r0".
+	Target string `json:"target,omitempty"`
+	Level  *int   `json:"level,omitempty"`
+	Derefs *int   `json:"derefs,omitempty"`
+	// ByRef distinguishes the two closure-capture messages.
+	ByRef *bool `json:"by_ref,omitempty"`
+	// Flow is the compiler's own account of how the value reached its
+	// destination.
+	Flow []EscapeFlowStep `json:"flow,omitempty"`
+	// Evidence is the compiler's line, exactly as printed. It is the record that
+	// survives any future change to how this report is modelled: if the kinds
+	// above turn out to be the wrong carving, this field still says what
+	// actually happened.
+	Evidence string `json:"evidence"`
+}
+
+// EscapeFlowStep is one line of a flow explanation.
+//
+// The compiler prints these in two shapes and both land here. A step with an
+// empty Reason is the header stating an edge — "flow: ~r0 ← &x" — and carries no
+// position. A step with a Reason is one hop along that edge, and carries the
+// position where it happened. Text is kept verbatim in both cases because the
+// compiler's rendering of a value is not reconstructible from its parts.
+type EscapeFlowStep struct {
+	Text   string `json:"text"`
+	Reason string `json:"reason,omitempty"`
+	File   string `json:"file,omitempty"`
+	Line   int    `json:"line,omitempty"`
+	Column int    `json:"column,omitempty"`
+}
+
+// RawDiagnostic is a line kept exactly as the compiler printed it, with whatever
+// position could be read off the front of it.
+type RawDiagnostic struct {
+	Package string `json:"package,omitempty"`
+	File    string `json:"file,omitempty"`
+	Line    int    `json:"line,omitempty"`
+	Column  int    `json:"column,omitempty"`
+	Text    string `json:"text"`
+}
