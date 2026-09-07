@@ -1,11 +1,13 @@
 {
-  "1": "Catalog",
+  "0": "testing.B",
+  "1": "newClient",
   "2": "profadvisor",
   "3": "FromReaders",
-  "4": "Resolve",
+  "4": "Generate",
   "5": "github.com/spf13/cobra.Command",
   "6": "FromProfile",
   "7": "Run",
+  "8": "corpus.go",
   "9": "providers.go",
   "10": "Run",
   "11": "example.com/profadvisor/fixture",
@@ -23,6 +25,7 @@
   "23": "escape/README.md",
   "24": "doc.go",
   "25": "example.com/escapecorpus",
-  "26": "Load",
-  "27": "Text"
+  "26": "Resolve",
+  "27": "Text",
+  "28": "resolveTarget"
 }
