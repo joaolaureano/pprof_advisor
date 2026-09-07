@@ -2,8 +2,8 @@
 
 A CLI that finds a hot-path in a Go benchmark, asks a language model how to fix
 it, and
-then measures whether the fix actually worked. It optimizes either CPU time or
-memory allocation, chosen per run.
+then measures whether the fix actually worked. It optimizes CPU time, memory
+allocation, or contention (block or mutex), chosen per run.
 
 Agents should reach for this tool when someone asks *why* Go code is slow or
 allocation-heavy, or asks to make a CPU-bound or allocation-bound Go package
@@ -46,23 +46,37 @@ compiler concluded and does not claim any of it costs anything — see below.
 
 Do **not** use it when:
 
-- The suspected cost is I/O, network, database, or lock contention. Those need a
-  block or mutex profile, which this tool does not capture, and it will produce
-  a confidently wrong answer.
+- The suspected cost is I/O, network, or database latency. Those need profiles
+  this tool does not capture, and it will produce a confidently wrong answer.
+  Lock and channel contention are in scope via `--profile block` and
+  `--profile mutex`.
 - There is no benchmark and the code cannot be exercised deterministically.
   Without a benchmark there is nothing to compare against, and the verdict step —
   the only part that establishes a change was worth making — cannot run.
 
 ## Choosing the objective
 
-`--profile cpu` (the default) optimizes `ns/op` from a CPU profile.
-`--profile memory` optimizes `B/op` from an allocation profile, or `allocs/op`
-with `--unit allocs/op`. The profile can be left off when the unit implies it:
-`--unit B/op` alone means a memory run.
-
 The objective is set once and reaches every stage: it selects which pprof sample
 type is read, which frame a cost is charged to, how the prompt frames the task,
 and which metric decides the verdict. That is why it is one flag and not four.
+
+Four kinds are supported:
+
+- `--profile cpu` (the default) optimizes `ns/op` from a CPU profile.
+- `--profile memory` optimizes `B/op` from an allocation profile, or `allocs/op`
+  with `--unit allocs/op`. The profile can be left off when the unit implies it:
+  `--unit B/op` alone means a memory run.
+- `--profile block` optimizes `ns/op` from a block-contention profile, reporting
+  time goroutines spend waiting on channels and semaphores.
+- `--profile mutex` optimizes `ns/op` from a mutex-contention profile, reporting
+  time goroutines spend waiting on mutexes.
+
+**Block and mutex profiles are judged on `ns/op` like CPU runs**, not on a
+contention metric. `go test -bench` reports no contention measurement, and a
+profile holds one sample per capture with no statistic to compare. The profile
+changes what evidence the model is shown about where time goes; it does not
+change what decides the verdict. Contention that costs no wall-clock time is not
+worth a patch.
 
 **A memory run keeps `ns/op` as a guard.** Trading time for memory is easy and
 usually not what was asked for, so a patch that significantly slows the
@@ -70,13 +84,35 @@ benchmark is `PIOROU` even when it allocates less. The two memory units do not
 guard each other: fewer bytes in more allocations is a legitimate outcome, so
 the unit you did not choose is reported and votes on nothing.
 
-Allocation profiles are attributed differently from CPU profiles, and this shows
-up in the output. The leaf frame of every allocation sample is
-`runtime.mallocgc`, so charging cost to the leaf — correct for CPU, where the
-leaf is the code that was running — would rank the allocator first and the code
-under test nowhere. Instead each sample is charged to the innermost frame inside
-the focus package: the call that asked for the memory, which is the line a patch
-can change.
+**Attribution to the focus frame:** Both allocation and contention profiles are
+attributed to the innermost frame inside the focus package, not to the leaf. The
+leaf frame of every allocation sample is `runtime.mallocgc`, and the leaf of a
+contention sample is `sync.(*Mutex).Lock` or `runtime.chanrecv` — standard
+library or runtime code that nobody can edit. Charging cost to the leaf would
+rank the allocator or synchronization primitive first and bury the code under
+test. Instead each sample is charged to the call that asked for the memory or
+caused the wait, which is the line a patch can change.
+
+### Caveats on contention profiles
+
+1. **Delay is time blocked, summed across goroutines.** Block and mutex profiles
+   measure the sum of delays on all goroutines combined. In a contention trace
+   from a worker pool, each blocked worker contributes its delay, so the total
+   routinely exceeds the benchmark's wall-clock time. That is not a bug in the
+   report.
+
+2. **Focus inference can miss in concurrent code.** `extract` identifies the
+   focus package from the `Benchmark*` frame in the profile. In a worker-pool
+   benchmark the goroutine that blocks was created by a worker and does not
+   descend from `Benchmark*`, so inference falls back to "busiest non-stdlib
+   module". When that picks wrong, use `--focus` to override.
+
+3. **Profiling overhead inflates the numbers.** Turning on block profiling with
+   `-blockprofilerate=1` records every blocking event, which costs time and
+   inflates `ns/op`. Baseline and after are captured with identical flags so the
+   `MELHOROU` / `PIOROU` verdict stays valid, but the absolute numbers from a
+   contention capture are not comparable to a clean run. The `--rate` flag exists
+   to trade detail for overhead.
 
 ## Requirements
 
@@ -209,11 +245,16 @@ between baseline and after or select cases by speed. Commit the generated tests
 and manifest before `run`, which requires a clean tree. See the README for a
 complete example. There is no automatic integration with `run`.
 
-### `profadvisor capture --pkg <pattern> [--dir <repo>] [--profile cpu|memory] [--bench <regexp>] [--count N]`
+### `profadvisor capture --pkg <pattern> [--dir <repo>] [--profile cpu|memory|block|mutex] [--bench <regexp>] [--count N] [--rate N]`
 
 Runs the benchmark once and writes a timestamped directory under
-`./profadvisor-out/` containing the profile — `cpu.prof` or `mem.prof`, per
-`--profile` — and `bench.txt`.
+`./profadvisor-out/` containing the profile and `bench.txt`.
+
+The profile written depends on `--profile`:
+- `cpu.prof` for a CPU profile (default)
+- `mem.prof` for a memory profile
+- `block.prof` for a block-contention profile
+- `mutex.prof` for a mutex-contention profile
 
 Both artifacts come from the same run, deliberately: the profile feeds the
 diagnosis and `bench.txt` feeds the verdict, and if they came from different runs
@@ -227,15 +268,25 @@ another.
 real change from noise; a single sample has more than once suggested a
 regression that turned out to be a double-digit gain.
 
+`--rate` controls sampling detail for contention profiles (block and mutex). It
+is `-blockprofilerate` for a block run and `-mutexprofilefraction` for a mutex
+run, and defaults to 1 (record every event). It is ignored for CPU and memory
+profiles. Recording every blocking event adds overhead that inflates `ns/op`, so
+the absolute numbers from a contention capture are not comparable to a clean run
+— but baseline and after are captured with identical flags, so the verdict stays
+valid.
+
 ```
 profadvisor capture --dir /path/to/target --pkg ./internal/parser/ --bench '^BenchmarkParse$'
+profadvisor capture --dir /path/to/target --pkg ./internal/sync/ --profile mutex --rate 10
 ```
 
-### `profadvisor extract <profile> [--profile cpu|memory]`
+### `profadvisor extract <profile> [--profile cpu|memory|block|mutex]`
 
 Ranks the hottest functions by self cost and attaches the surrounding source
 with per-line cost. `--profile` must match the profile that was captured;
-pointing a CPU objective at `mem.prof` is an error rather than an empty result.
+pointing a CPU objective at `mem.prof` or `block.prof` is an error rather than
+an empty result.
 
 Runtime and standard-library frames are filtered out of the ranking. This is not
 cosmetic: in a short benchmark, idle netpoller threads alone can account for more

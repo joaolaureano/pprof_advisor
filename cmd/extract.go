@@ -24,7 +24,11 @@ func newExtractCmd() *cobra.Command {
 			"For a memory profile, an allocation is charged to the innermost frame " +
 			"in the code under test rather than to the leaf. The leaf of every " +
 			"allocation sample is runtime.mallocgc, and ranking that produces one " +
-			"enormous hotspot nobody can edit.",
+			"enormous hotspot nobody can edit. The same attribution applies to block " +
+			"and mutex contention profiles: the leaf of a contention sample is " +
+			"runtime.chanrecv or sync.(*Mutex).Lock, never the code that caused the wait. " +
+			"Cost is charged to the call that caused the wait, which is the line a patch " +
+			"can change.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := measurement.Resolve(profile, unit)

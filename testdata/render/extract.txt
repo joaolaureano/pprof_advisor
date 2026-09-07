@@ -16,7 +16,7 @@ Filtered out (not ranked), by cost reached from the focus package:
 Hotspots:
 
 1. example.com/profadvisor/fixture/matcher.segment
-   File:     /Users/joaolaureano/Coding/pprof_advisor/testdata/fixture/matcher/matcher.go:74
+   File:     <testdata>/fixture/matcher/matcher.go:74
    Self:     4.29s (64.7%)
    Cumul:    4.54s (46.5%)
    Source:
@@ -37,7 +37,7 @@ Hotspots:
     82 | }
 
 2. example.com/profadvisor/fixture/matcher.matches
-   File:     /Users/joaolaureano/Coding/pprof_advisor/testdata/fixture/matcher/matcher.go:55
+   File:     <testdata>/fixture/matcher/matcher.go:55
    Self:     1.55s (23.4%)
    Cumul:    7.04s (72.1%)
    Source:
@@ -60,7 +60,7 @@ Hotspots:
     68 | 		}
 
 3. example.com/profadvisor/fixture/matcher.(*Table).Match
-   File:     /Users/joaolaureano/Coding/pprof_advisor/testdata/fixture/matcher/matcher.go:25
+   File:     <testdata>/fixture/matcher/matcher.go:25
    Self:     530ms (8.0%)
    Cumul:    6.13s (62.7%)
    Source:

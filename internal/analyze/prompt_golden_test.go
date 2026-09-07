@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/joaolaureano/profadvisor/internal/extract"
@@ -44,6 +45,8 @@ func TestPromptsMatchGolden(t *testing.T) {
 		{"cpu", measurement.CPU, "ns/op"},
 		{"mem_bytes", measurement.Memory, "B/op"},
 		{"mem_allocs", measurement.Memory, "allocs/op"},
+		{"block", measurement.Block, "ns/op"},
+		{"mutex", measurement.Mutex, "ns/op"},
 	}
 	for _, tc := range cases {
 		cfg, err := measurement.Resolve(tc.kind, tc.unit)
@@ -82,6 +85,12 @@ func compareGolden(t *testing.T, name, got string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The recorded prompt names the source file by absolute path, which is
+	// correct at runtime and wrong in a golden file: it would pin these tests
+	// to one checkout at one path, which is the very thing internal/fixture
+	// re-anchors profiles to avoid. The checkout root is replaced by a
+	// placeholder so the goldens travel with the repository.
+	got = strings.ReplaceAll(got, dir, "<testdata>")
 	path := filepath.Join(dir, "prompts", name)
 	if *update {
 		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {

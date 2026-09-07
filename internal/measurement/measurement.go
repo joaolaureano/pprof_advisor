@@ -9,6 +9,8 @@ type Kind string
 const (
 	CPU           Kind = "cpu"
 	Memory        Kind = "memory"
+	Block         Kind = "block"
+	Mutex         Kind = "mutex"
 	Objective          = "objective"
 	Guard              = "guard"
 	Informational      = "informational"
@@ -61,8 +63,20 @@ func Resolve(kind Kind, unit string) (Config, error) {
 		default:
 			return Config{}, fmt.Errorf("memory profile requires B/op or allocs/op, got %q", unit)
 		}
+	case Block, Mutex:
+		if unit == "" {
+			c.Unit = "ns/op"
+		}
+		if c.Unit != "ns/op" {
+			return Config{}, fmt.Errorf("%s profile requires ns/op, got %q", kind, unit)
+		}
+		// The leaf of a contention sample is runtime.chanrecv or
+		// sync.(*Mutex).Lock, never the code that caused the wait, so cost is
+		// charged the same way an allocation is: to the innermost frame inside
+		// the code under test.
+		c.SampleType, c.SampleUnit, c.Attribution = "delay", "nanoseconds", "first_focus_frame"
 	default:
-		return Config{}, fmt.Errorf("unsupported profile %q (want cpu or memory)", kind)
+		return Config{}, fmt.Errorf("unsupported profile %q (want cpu, memory, block, or mutex)", kind)
 	}
 	return c, nil
 }

@@ -26,6 +26,12 @@ func compareGolden(t *testing.T, name, got string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The rendered output names the source file by absolute path, which is
+	// correct at runtime and wrong in a golden file: it would pin these tests
+	// to one checkout at one path, which is the very thing internal/fixture
+	// re-anchors profiles to avoid. The checkout root is replaced by a
+	// placeholder so the goldens travel with the repository.
+	got = strings.ReplaceAll(got, dir, "<testdata>")
 	path := filepath.Join(dir, "render", name)
 	if *update {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

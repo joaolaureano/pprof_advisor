@@ -18,7 +18,7 @@ Where the filtered cost went (these are consequences of the code below, not thin
 
 ## 1. example.com/profadvisor/fixture/matcher.segment
 self 4.29s (64.7% of attributed), cumulative 4.54s (46.5% of total)
-/Users/joaolaureano/Coding/pprof_advisor/testdata/fixture/matcher/matcher.go:68
+<testdata>/fixture/matcher/matcher.go:68
 
 ```go
     68 | 		}
@@ -40,7 +40,7 @@ self 4.29s (64.7% of attributed), cumulative 4.54s (46.5% of total)
 
 ## 2. example.com/profadvisor/fixture/matcher.matches
 self 1.55s (23.4% of attributed), cumulative 7.04s (72.1% of total)
-/Users/joaolaureano/Coding/pprof_advisor/testdata/fixture/matcher/matcher.go:52
+<testdata>/fixture/matcher/matcher.go:52
 
 ```go
     52 | 	return nil
@@ -64,7 +64,7 @@ self 1.55s (23.4% of attributed), cumulative 7.04s (72.1% of total)
 
 ## 3. example.com/profadvisor/fixture/matcher.(*Table).Match
 self 530ms (8.0% of attributed), cumulative 6.13s (62.7% of total)
-/Users/joaolaureano/Coding/pprof_advisor/testdata/fixture/matcher/matcher.go:18
+<testdata>/fixture/matcher/matcher.go:18
 
 ```go
     18 | 
