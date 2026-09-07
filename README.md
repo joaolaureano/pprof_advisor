@@ -98,8 +98,15 @@ Inputs are prepared before `b.Loop()`, allocations are reported, and the measure
 loop calls the function directly. No fuzzing or random input generation occurs
 inside the benchmark.
 
-`--out` receives the code and manifest. `--write` additionally installs the same
-code in the target package. Existing files and conflicting symbols are refused.
+`--out` receives a record — the generated code plus a build constraint that excludes
+it from compilation — alongside the manifest. This record is safe to commit
+anywhere in your repository, including inside the target module, because the build
+constraint prevents duplicate-symbol and orphan-package errors.
+
+`--write` additionally installs the live test file into the target package, without
+any build constraint. That is the copy that runs when you execute
+`go test ./internal/parser`. Existing files and conflicting symbols are refused.
+
 The JSON report and manifest use their own `schema_version: 2`; the report says
 `generated: true` and `validated: false` because the target has not been executed.
 Use `--format text` for a readable report. Diagnostics use stderr and exits are

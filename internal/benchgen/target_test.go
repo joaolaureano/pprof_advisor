@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -65,4 +66,66 @@ func TestResolveTarget(t *testing.T) {
 	if _, err := resolveTarget(context.Background(), Options{Dir: dir, Package: ".", Function: "hidden"}); err == nil {
 		t.Fatal("accepted existing symbol")
 	}
+}
+
+func TestResolveTargetTestFileConflicts(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod", "module example.com/target\n\ngo 1.24\n")
+	write("target.go", `package target
+	 func hidden(s string) (int,error) {return len(s),nil}
+	 `)
+
+	// Test 1: _test.go declaring profadvisorTesting must fail
+	t.Run("profadvisorTesting in test file", func(t *testing.T) {
+		write("conflict1_test.go", "package target\nvar profadvisorTesting string\n")
+		_, err := resolveTarget(context.Background(), Options{Dir: dir, Package: ".", Function: "hidden"})
+		if err == nil {
+			t.Fatal("expected error for profadvisorTesting in test file, got nil")
+		}
+		if !strings.Contains(err.Error(), "profadvisorTesting") {
+			t.Fatalf("error should mention profadvisorTesting, got: %v", err)
+		}
+	})
+	os.Remove(filepath.Join(dir, "conflict1_test.go"))
+
+	// Test 2: _test.go declaring profadvisorMath must fail
+	t.Run("profadvisorMath in test file", func(t *testing.T) {
+		write("conflict2_test.go", "package target\nvar profadvisorMath int\n")
+		_, err := resolveTarget(context.Background(), Options{Dir: dir, Package: ".", Function: "hidden"})
+		if err == nil {
+			t.Fatal("expected error for profadvisorMath in test file, got nil")
+		}
+		if !strings.Contains(err.Error(), "profadvisorMath") {
+			t.Fatalf("error should mention profadvisorMath, got: %v", err)
+		}
+	})
+	os.Remove(filepath.Join(dir, "conflict2_test.go"))
+
+	// Test 3: _test.go shadowing a predeclared identifier must fail
+	t.Run("shadow predeclared string in test file", func(t *testing.T) {
+		write("conflict3_test.go", "package target\ntype string struct{}\n")
+		_, err := resolveTarget(context.Background(), Options{Dir: dir, Package: ".", Function: "hidden"})
+		if err == nil {
+			t.Fatal("expected error for shadowing predeclared string in test file, got nil")
+		}
+		if !strings.Contains(err.Error(), "string") {
+			t.Fatalf("error should mention string, got: %v", err)
+		}
+	})
+	os.Remove(filepath.Join(dir, "conflict3_test.go"))
+
+	// Test 4: Control case - ordinary _test.go must succeed
+	t.Run("ordinary test file succeeds", func(t *testing.T) {
+		write("normal_test.go", "package target\nimport \"testing\"\nfunc TestSomething(t *testing.T) {}\n")
+		_, err := resolveTarget(context.Background(), Options{Dir: dir, Package: ".", Function: "hidden"})
+		if err != nil {
+			t.Fatalf("expected no error for ordinary test file, got: %v", err)
+		}
+	})
 }

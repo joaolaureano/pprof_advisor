@@ -167,9 +167,15 @@ without inventing correctness properties or treating returned errors as failures
 The caller must ensure determinism, no external state, and no mutation or
 retention of inputs.
 
-The output directory receives self-contained code and a manifest recording
-target, generator version, seed origins and hashes. `--write` also installs the
-test in the target package; existing files and symbol conflicts are refused.
+The output directory receives a record — the generated code plus a build constraint
+that excludes it from compilation — alongside the manifest. This record is safe to
+commit anywhere in your repository, including inside the target module, because the
+build constraint prevents duplicate-symbol and orphan-package errors.
+
+`--write` additionally installs the live test file into the target package, without
+any build constraint. That is the copy that runs when you execute the tests.
+Existing files and symbol conflicts are refused.
+
 This reporter has its own schema version **2** and no measurement object.
 `generated: true` with `validated: false` means generation succeeded, not that
 the seeds passed: generation never executes the target and needs no API key.

@@ -25,6 +25,36 @@ type listedPackage struct {
 	Error                                        *struct{ Err string }
 }
 
+// collectPackageLevelNames returns the package-level names the given files
+// declare. It reads the syntax rather than a type-checked scope because the
+// names that matter here live in test files, which are not part of the scope
+// resolveTarget type-checks.
+func collectPackageLevelNames(files []*ast.File) map[string]bool {
+	names := make(map[string]bool)
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			switch d := decl.(type) {
+			case *ast.FuncDecl:
+				if d.Recv == nil {
+					names[d.Name.Name] = true
+				}
+			case *ast.GenDecl:
+				for _, spec := range d.Specs {
+					switch s := spec.(type) {
+					case *ast.TypeSpec:
+						names[s.Name.Name] = true
+					case *ast.ValueSpec:
+						for _, n := range s.Names {
+							names[n.Name] = true
+						}
+					}
+				}
+			}
+		}
+	}
+	return names
+}
+
 func resolveTarget(ctx context.Context, o Options) (Target, error) {
 	var target Target
 	if o.Function == "" || !token.IsIdentifier(o.Function) || o.Function == "_" {
@@ -95,40 +125,31 @@ func resolveTarget(ctx context.Context, o Options) (Target, error) {
 	fuzzName := "FuzzProfadvisor_" + o.Function
 	benchmarkName := "BenchmarkProfadvisor_" + o.Function
 	allFiles := append(append(append([]string{}, p.GoFiles...), p.TestGoFiles...), p.XTestGoFiles...)
+	// The generated file is installed into the package's internal test files,
+	// so those are kept apart from the rest: a name declared there collides
+	// with the generated one, while a name in an external _test package does
+	// not, and the type-checked scope built below sees neither.
+	var allDecls, testDecls []*ast.File
 	for i, name := range allFiles {
 		file, err := parser.ParseFile(fset, filepath.Join(p.Dir, name), nil, 0)
 		if err != nil {
 			return target, fmt.Errorf("parse target: %w", err)
 		}
-		if i < len(p.GoFiles) {
+		switch {
+		case i < len(p.GoFiles):
 			files = append(files, file)
+		case i < len(p.GoFiles)+len(p.TestGoFiles):
+			testDecls = append(testDecls, file)
 		}
-		for _, decl := range file.Decls {
-			var names []string
-			switch d := decl.(type) {
-			case *ast.FuncDecl:
-				if d.Recv == nil {
-					names = append(names, d.Name.Name)
-				}
-			case *ast.GenDecl:
-				for _, spec := range d.Specs {
-					switch s := spec.(type) {
-					case *ast.TypeSpec:
-						names = append(names, s.Name.Name)
-					case *ast.ValueSpec:
-						for _, n := range s.Names {
-							names = append(names, n.Name)
-						}
-					}
-				}
-			}
-			for _, name := range names {
-				if name == fuzzName || name == benchmarkName {
-					return target, fmt.Errorf("generated symbol %s already exists", name)
-				}
-			}
+		allDecls = append(allDecls, file)
+	}
+	declared := collectPackageLevelNames(allDecls)
+	for _, name := range []string{fuzzName, benchmarkName} {
+		if declared[name] {
+			return target, fmt.Errorf("generated symbol %s already exists", name)
 		}
 	}
+	testFileNames := collectPackageLevelNames(testDecls)
 	imp := importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) {
 		archive := exports[path]
 		if archive == "" {
@@ -142,7 +163,7 @@ func resolveTarget(ctx context.Context, o Options) (Target, error) {
 		return target, fmt.Errorf("type-check target: %w", err)
 	}
 	for _, name := range []string{"string", "byte"} {
-		if pkg.Scope().Lookup(name) != nil {
+		if pkg.Scope().Lookup(name) != nil || testFileNames[name] {
 			return target, fmt.Errorf("package shadows predeclared %s used by generated code", name)
 		}
 	}
@@ -150,11 +171,11 @@ func resolveTarget(ctx context.Context, o Options) (Target, error) {
 	if o.Function == testingAlias {
 		testingAlias += "_"
 	}
-	if pkg.Scope().Lookup(testingAlias) != nil {
+	if pkg.Scope().Lookup(testingAlias) != nil || testFileNames[testingAlias] {
 		return target, fmt.Errorf("package symbol %s conflicts with generated testing import", testingAlias)
 	}
 	for _, name := range []string{"profadvisorMath", "profadvisorMath_"} {
-		if pkg.Scope().Lookup(name) != nil {
+		if pkg.Scope().Lookup(name) != nil || testFileNames[name] {
 			return target, fmt.Errorf("package symbol %s conflicts with generated math import", name)
 		}
 	}

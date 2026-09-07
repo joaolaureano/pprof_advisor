@@ -1,6 +1,7 @@
 package benchgen
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,19 @@ import (
 	"path/filepath"
 	"sort"
 )
+
+// inertCopy prepends a build constraint that excludes the generated artifact
+// from all builds. The record exists to be committed and diffed as documentation
+// of what was generated, and a second copy of the same package-level test
+// functions in the tree would cause a duplicate-symbol or orphan-package build
+// failure for the target repository. The constraint is followed by a blank line
+// per the Go build constraint syntax.
+func inertCopy(code []byte) []byte {
+	var buf bytes.Buffer
+	buf.WriteString("//go:build ignore\n\n")
+	buf.Write(code)
+	return buf.Bytes()
+}
 
 func writeArtifacts(o Options, target Target, seeds []Seed, code []byte) (*Result, error) {
 	if o.Out == "" {
@@ -41,7 +55,7 @@ func writeArtifacts(o Options, target Target, seeds []Seed, code []byte) (*Resul
 		path string
 		data []byte
 	}
-	files := []artifact{{result.CodePath, code}, {result.ManifestPath, manifestBytes}}
+	files := []artifact{{result.CodePath, inertCopy(code)}, {result.ManifestPath, manifestBytes}}
 	if o.Write {
 		result.InstalledPath, err = filepath.Abs(filepath.Join(target.Dir, name+"_test.go"))
 		if err != nil {

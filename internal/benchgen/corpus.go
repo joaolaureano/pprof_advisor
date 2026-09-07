@@ -15,6 +15,15 @@ import (
 	"strings"
 )
 
+// mathPlaceholder stands in for the math package qualifier in a generated
+// literal. The generated file imports math under an alias chosen at generation
+// time, so the qualifier cannot be written here; and a plain "math." would be
+// indistinguishable from the same text occurring inside a string seed, which is
+// how this corrupted corpus data. A NUL byte cannot appear in the output of
+// strconv.Quote, which escapes control characters, so this sentinel cannot
+// collide with seed content.
+const mathPlaceholder = "\x00math."
+
 // loadCorpus accepts the native Go fuzz v1 format. Each non-empty line after
 // the header is one argument, so one file is one complete argument tuple.
 func loadCorpus(dir string, inputTypes []string) ([]Seed, error) {
@@ -28,8 +37,14 @@ func loadCorpus(dir string, inputTypes []string) ([]Seed, error) {
 	}
 	byHash := map[string]*Seed{}
 	for _, entry := range entries {
+		// Skip dotfiles (tooling debris like .DS_Store) and directories
+		// without failing, but do fail for malformed seed files since those
+		// represent data loss and must not be silently ignored.
 		if entry.IsDir() {
-			return nil, fmt.Errorf("corpus entry %s is a directory", entry.Name())
+			continue
+		}
+		if strings.HasPrefix(entry.Name(), ".") {
+			continue
 		}
 		path := filepath.Join(root, entry.Name())
 		content, err := os.ReadFile(path)
@@ -228,10 +243,12 @@ func numericCorpusLiteral(expr ast.Expr, inputType string) (string, error) {
 		}
 		return inputType + "(" + strconv.FormatUint(v, 10) + ")", nil
 	}
+	// An int seed is only meaningful at the word size that produced it. The
+	// host's strconv.IntSize is the only sensible width, so using it directly
+	// avoids silently accepting values the target's int cannot hold. This will
+	// fail at generation time with a clear message rather than producing a
+	// harness that does not compile.
 	bits := integerBits(inputType)
-	if inputType == "int" {
-		bits = 64
-	}
 	v, err := strconv.ParseInt(text, 0, bits)
 	if err != nil {
 		return "", fmt.Errorf("invalid %s literal: %w", inputType, err)
@@ -282,21 +299,21 @@ func floatLiteral(text string, kind token.Token, inputType string) (string, erro
 	}
 	if text == "NaN" {
 		if inputType == "float32" {
-			return "float32(math.NaN())", nil
+			return "float32(" + mathPlaceholder + "NaN())", nil
 		}
-		return "math.NaN()", nil
+		return mathPlaceholder + "NaN()", nil
 	}
 	if text == "+Inf" {
 		if inputType == "float32" {
-			return "float32(math.Inf(1))", nil
+			return "float32(" + mathPlaceholder + "Inf(1))", nil
 		}
-		return "math.Inf(1)", nil
+		return mathPlaceholder + "Inf(1)", nil
 	}
 	if text == "-Inf" {
 		if inputType == "float32" {
-			return "float32(math.Inf(-1))", nil
+			return "float32(" + mathPlaceholder + "Inf(-1))", nil
 		}
-		return "math.Inf(-1)", nil
+		return mathPlaceholder + "Inf(-1)", nil
 	}
 	bits := 64
 	if inputType == "float32" {
@@ -336,7 +353,7 @@ func floatBitsLiteral(call *ast.CallExpr, inputType string) (string, bool, error
 	if err != nil {
 		return "", true, fmt.Errorf("invalid float bits: %w", err)
 	}
-	return "math." + want + "(0x" + strconv.FormatUint(v, 16) + ")", true, nil
+	return mathPlaceholder + want + "(0x" + strconv.FormatUint(v, 16) + ")", true, nil
 }
 
 func integerBits(inputType string) int {

@@ -80,9 +80,9 @@ func generateCode(target Target, seeds []Seed) ([]byte, error) {
 		}
 		literals := append([]string(nil), seed.Literals...)
 		for i, literal := range literals {
-			if strings.Contains(literal, "math.") {
+			if strings.Contains(literal, mathPlaceholder) {
 				data.NeedsMath = true
-				literals[i] = strings.ReplaceAll(literal, "math.", data.Math+".")
+				literals[i] = strings.ReplaceAll(literal, mathPlaceholder, data.Math+".")
 			}
 		}
 		data.Seeds = append(data.Seeds, entry{Name: strconv.Quote(seed.Hash), Literals: literals})

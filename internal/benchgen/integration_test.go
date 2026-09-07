@@ -170,3 +170,39 @@ func TestIntegrationSymbolCollision(t *testing.T) {
 		t.Fatal("existing fuzz symbol accepted")
 	}
 }
+
+func TestIntegrationRecordInTargetModule(t *testing.T) {
+	// Test that writing the record (--out) into a subdirectory of the target
+	// module does not break go vet, because the record has a build constraint.
+	opts := integrationTarget(t, `func process(s string) int { return len(s) }`, `string("test")`)
+	opts.Write = false
+	// Point --out to a subdirectory within the target module, simulating the
+	// recommended practice of committing generated artifacts.
+	opts.Out = filepath.Join(opts.Dir, "artifacts")
+	result, err := Generate(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("generation failed: %v", err)
+	}
+
+	// Verify that go vet still succeeds in the target module despite the record.
+	output, err := integrationGo(t, opts.Dir, "vet", "./...")
+	if err != nil {
+		t.Fatalf("go vet failed in target module with record present: %v\n%s", err, output)
+	}
+
+	// Verify that go build still succeeds in the target module.
+	output, err = integrationGo(t, opts.Dir, "build", "./...")
+	if err != nil {
+		t.Fatalf("go build failed in target module with record present: %v\n%s", err, output)
+	}
+
+	// Verify that the record exists and has the build constraint.
+	recordContent, err := os.ReadFile(result.CodePath)
+	if err != nil {
+		t.Fatalf("read record: %v", err)
+	}
+	const prefix = "//go:build ignore\n\n"
+	if !bytes.HasPrefix(recordContent, []byte(prefix)) {
+		t.Fatalf("record must start with build constraint. Got: %q", recordContent[:len(prefix)])
+	}
+}

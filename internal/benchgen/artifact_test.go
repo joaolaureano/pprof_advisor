@@ -2,6 +2,8 @@ package benchgen
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,8 +24,13 @@ func TestArtifactsCollisionAndInstall(t *testing.T) {
 		t.Fatal("overwrote existing file")
 	}
 	content, err := os.ReadFile(result.CodePath)
-	if err != nil || string(content) != "code" {
-		t.Fatalf("changed existing artifact: %q %v", content, err)
+	if err != nil {
+		t.Fatalf("failed to read artifact: %v", err)
+	}
+	// The record must have the build constraint prefix.
+	expected := "//go:build ignore\n\ncode"
+	if string(content) != expected {
+		t.Fatalf("changed existing artifact: %q (expected %q)", content, expected)
 	}
 }
 
@@ -74,5 +81,99 @@ func TestArtifactsManifestStable(t *testing.T) {
 	}
 	if !bytes.Equal(a, b) {
 		t.Fatalf("unstable manifest: %s\n%s", a, b)
+	}
+}
+
+func TestArtifactsOutRecordIsInert(t *testing.T) {
+	root := t.TempDir()
+	outDir := filepath.Join(root, "out")
+	targetDir := filepath.Join(root, "target")
+	if err := os.Mkdir(outDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(targetDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	target := Target{Dir: targetDir, Function: "parse"}
+	code := []byte("package foo\nfunc Test() {}")
+	o := Options{Out: outDir, Write: true}
+	result, err := writeArtifacts(o, target, []Seed{{Hash: "a", Origins: []string{"seed"}}}, code)
+	if err != nil {
+		t.Fatalf("generation failed: %v", err)
+	}
+
+	// Read the record written to --out.
+	record, err := os.ReadFile(result.CodePath)
+	if err != nil {
+		t.Fatalf("read record: %v", err)
+	}
+
+	// The record must begin with the build constraint and a blank line.
+	const prefix = "//go:build ignore\n\n"
+	if !bytes.HasPrefix(record, []byte(prefix)) {
+		t.Fatalf("record does not start with build constraint.\nGot prefix: %q\nWant prefix: %q", record[:len(prefix)], prefix)
+	}
+
+	// The record without the prefix must be identical to the generated code.
+	recordContent := record[len(prefix):]
+	if !bytes.Equal(recordContent, code) {
+		t.Fatalf("record content differs from generated code.\nGot: %q\nWant: %q", recordContent, code)
+	}
+
+	// Read the installed file written to the target package.
+	installed, err := os.ReadFile(result.InstalledPath)
+	if err != nil {
+		t.Fatalf("read installed: %v", err)
+	}
+
+	// The installed file must NOT contain the build constraint and must be byte-identical to the generated code.
+	if !bytes.Equal(installed, code) {
+		t.Fatalf("installed file differs from generated code.\nGot: %q\nWant: %q", installed, code)
+	}
+	if bytes.HasPrefix(installed, []byte("//go:build ignore")) {
+		t.Fatal("installed file must not contain build constraint")
+	}
+
+	// Verify that CodeHash hashes the generated code, not the inert record.
+	hash := sha256.Sum256(code)
+	expectedHash := hex.EncodeToString(hash[:])
+	if result.Manifest.CodeHash != expectedHash {
+		t.Fatalf("CodeHash mismatch.\nGot: %s\nWant: %s", result.Manifest.CodeHash, expectedHash)
+	}
+}
+
+func TestArtifactsOutRecordWithoutWrite(t *testing.T) {
+	dir := t.TempDir()
+	target := Target{Dir: "/unrelated", Function: "parse"}
+	code := []byte("package foo\nfunc Test() {}")
+	o := Options{Out: dir, Write: false}
+	result, err := writeArtifacts(o, target, []Seed{{Hash: "a", Origins: []string{"seed"}}}, code)
+	if err != nil {
+		t.Fatalf("generation failed: %v", err)
+	}
+
+	// Read the record written to --out.
+	record, err := os.ReadFile(result.CodePath)
+	if err != nil {
+		t.Fatalf("read record: %v", err)
+	}
+
+	// Even without --write, the record must have the build constraint.
+	const prefix = "//go:build ignore\n\n"
+	if !bytes.HasPrefix(record, []byte(prefix)) {
+		t.Fatalf("record without --write must still have build constraint.\nGot prefix: %q\nWant prefix: %q", record[:len(prefix)], prefix)
+	}
+
+	// Verify that CodeHash still hashes the generated code.
+	hash := sha256.Sum256(code)
+	expectedHash := hex.EncodeToString(hash[:])
+	if result.Manifest.CodeHash != expectedHash {
+		t.Fatalf("CodeHash mismatch.\nGot: %s\nWant: %s", result.Manifest.CodeHash, expectedHash)
+	}
+
+	// InstalledPath should be empty when Write is false.
+	if result.InstalledPath != "" {
+		t.Fatalf("InstalledPath should be empty when Write=false, got: %s", result.InstalledPath)
 	}
 }
