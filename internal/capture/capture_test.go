@@ -2,12 +2,15 @@ package capture
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/joaolaureano/profadvisor/internal/fixture"
+	"github.com/joaolaureano/profadvisor/internal/measurement"
 )
 
 // TestRunAgainstFixtureModule is an end-to-end check: a real `go test -bench`
@@ -75,5 +78,71 @@ func TestRunReportsNoMatchingBenchmarks(t *testing.T) {
 	}
 	if _, statErr := os.Stat(res.BenchPath); statErr != nil {
 		t.Fatalf("bench output was not preserved: %v", statErr)
+	}
+}
+
+func TestProfileFlagsPerKind(t *testing.T) {
+	tests := []struct {
+		kind      measurement.Kind
+		rate      int
+		wantFile  string
+		wantFlags []string
+	}{
+		{
+			kind:      measurement.CPU,
+			rate:      0,
+			wantFile:  "cpu.prof",
+			wantFlags: []string{"-cpuprofile", "/tmp/x.prof"},
+		},
+		{
+			kind:      measurement.Memory,
+			rate:      5,
+			wantFile:  "mem.prof",
+			wantFlags: []string{"-memprofile", "/tmp/x.prof"},
+		},
+		{
+			kind:      measurement.Block,
+			rate:      0,
+			wantFile:  "block.prof",
+			wantFlags: []string{"-blockprofile", "/tmp/x.prof", "-blockprofilerate", "1"},
+		},
+		{
+			kind:      measurement.Block,
+			rate:      7,
+			wantFile:  "block.prof",
+			wantFlags: []string{"-blockprofile", "/tmp/x.prof", "-blockprofilerate", "7"},
+		},
+		{
+			kind:      measurement.Mutex,
+			rate:      0,
+			wantFile:  "mutex.prof",
+			wantFlags: []string{"-mutexprofile", "/tmp/x.prof", "-mutexprofilefraction", "1"},
+		},
+		{
+			kind:      measurement.Mutex,
+			rate:      3,
+			wantFile:  "mutex.prof",
+			wantFlags: []string{"-mutexprofile", "/tmp/x.prof", "-mutexprofilefraction", "3"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s_rate%d", tt.kind, tt.rate), func(t *testing.T) {
+			// Test profileFile
+			file := profileFile(tt.kind)
+			if file != tt.wantFile {
+				t.Errorf("profileFile(%s) = %q, want %q", tt.kind, file, tt.wantFile)
+			}
+
+			// Test profileFlags
+			cfg, err := measurement.Resolve(tt.kind, "")
+			if err != nil {
+				t.Fatalf("Resolve(%s, \"\"): %v", tt.kind, err)
+			}
+			flags := profileFlags(cfg, tt.rate, "/tmp/x.prof")
+			if !slices.Equal(flags, tt.wantFlags) {
+				t.Errorf("profileFlags(cfg, %d, \"/tmp/x.prof\") = %v, want %v", tt.rate, flags, tt.wantFlags)
+			}
+		})
 	}
 }

@@ -1,8 +1,8 @@
 # profadvisor
 
 Finds a hot-path in **any** Go package that has benchmarks, asks a language model
-how to fix it, and then measures whether the fix actually worked. It optimizes CPU time
-or memory allocation, chosen per run.
+how to fix it, and then measures whether the fix actually worked. It optimizes CPU time,
+memory allocation, or contention (block or mutex), chosen per run.
 
 It also answers a second, narrower question that needs no benchmark: what the Go
 compiler's escape analysis concluded about a package. See
@@ -34,6 +34,9 @@ export PROFADVISOR_API_KEY=...
 
 # optimize allocation instead of time
 ./profadvisor run --dir /path/to/your/repo --pkg ./internal/parser/ --profile memory
+
+# optimize for lock contention
+./profadvisor run --dir /path/to/your/repo --pkg ./internal/sync/ --profile mutex
 ```
 
 Nothing about the target is assumed or configured anywhere: change `--dir` and
@@ -163,12 +166,19 @@ itself, not that gaps cannot happen.
 
 ## Scope
 
-CPU and allocation profiles over `go test -bench`. Block, mutex, and trace
-profiles are not covered, and a target that waits on I/O will get a confident
-answer that means nothing.
+CPU, allocation, block-contention, and mutex-contention profiles over `go test -bench`.
+Trace profiles are not covered. A target that waits on I/O, network, or databases will
+get a confident answer that means nothing.
 
 A memory run optimizes `B/op` (or `allocs/op`) and keeps `ns/op` as a guard, so
 a patch that saves bytes by spending time is rejected rather than celebrated.
+
+Block and mutex runs optimize `ns/op` — the wall-clock time the benchmark reports.
+Recording every contention event adds overhead that inflates the numbers, so absolute
+values from a contention capture are not directly comparable to a clean run. Baseline
+and after are captured with identical profiling flags, so the verdict—whether the change
+helped or hurt—stays valid. A patch that reduces contention but adds absolute time is
+not an improvement.
 
 ## Layout
 

@@ -42,8 +42,9 @@ type ExtractResult struct {
 // see how much was discarded.
 //
 // Both are in Measurement.SampleUnit — nanoseconds for a CPU profile, bytes or
-// object counts for a memory one. Reading them without consulting Measurement
-// is what version 2 exists to prevent.
+// object counts for a memory one, and nanoseconds of blocked time for a block or
+// mutex profile. Reading them without consulting Measurement is what version 2
+// exists to prevent.
 type ProfileMeta struct {
 	Path        string             `json:"path"`
 	Measurement measurement.Config `json:"measurement"`

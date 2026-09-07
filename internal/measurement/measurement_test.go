@@ -58,3 +58,78 @@ func TestDefaultsAndInvalidCombinations(t *testing.T) {
 		t.Fatal("accepted incomplete configuration")
 	}
 }
+
+func TestContentionObjectives(t *testing.T) {
+	for _, kind := range []Kind{Block, Mutex} {
+		t.Run(string(kind), func(t *testing.T) {
+			// Test Resolve(kind, "ns/op") succeeds with correct fields
+			c, err := Resolve(kind, "ns/op")
+			if err != nil {
+				t.Fatalf("Resolve(%q, %q): %v", kind, "ns/op", err)
+			}
+			if c.SampleType != "delay" {
+				t.Fatalf("Resolve(%q, %q).SampleType = %q, want %q", kind, "ns/op", c.SampleType, "delay")
+			}
+			if c.SampleUnit != "nanoseconds" {
+				t.Fatalf("Resolve(%q, %q).SampleUnit = %q, want %q", kind, "ns/op", c.SampleUnit, "nanoseconds")
+			}
+			if c.Attribution != "first_focus_frame" {
+				t.Fatalf("Resolve(%q, %q).Attribution = %q, want %q", kind, "ns/op", c.Attribution, "first_focus_frame")
+			}
+			if c.Unit != "ns/op" {
+				t.Fatalf("Resolve(%q, %q).Unit = %q, want %q", kind, "ns/op", c.Unit, "ns/op")
+			}
+
+			// Test Resolve(kind, "") yields the same config (default unit is ns/op)
+			cDefault, err := Resolve(kind, "")
+			if err != nil {
+				t.Fatalf("Resolve(%q, %q): %v", kind, "", err)
+			}
+			if cDefault != c {
+				t.Fatalf("Resolve(%q, %q) = %+v, want %+v", kind, "", cDefault, c)
+			}
+
+			// Test Validate() returns nil
+			if err := c.Validate(); err != nil {
+				t.Fatalf("Resolve(%q, %q).Validate(): %v", kind, "ns/op", err)
+			}
+
+			// Test Metrics()
+			metrics := c.Metrics()
+			if len(metrics) == 0 {
+				t.Fatalf("Resolve(%q, %q).Metrics() returned empty slice", kind, "ns/op")
+			}
+			if metrics[0].Role != Objective {
+				t.Fatalf("Resolve(%q, %q).Metrics()[0].Role = %q, want %q", kind, "ns/op", metrics[0].Role, Objective)
+			}
+			if metrics[0].Unit != "ns/op" {
+				t.Fatalf("Resolve(%q, %q).Metrics()[0].Unit = %q, want %q", kind, "ns/op", metrics[0].Unit, "ns/op")
+			}
+
+			// Test Resolve(kind, "B/op") returns an error
+			if _, err := Resolve(kind, "B/op"); err == nil {
+				t.Fatalf("Resolve(%q, %q) should return error", kind, "B/op")
+			}
+
+			// Test Resolve(kind, "allocs/op") returns an error
+			if _, err := Resolve(kind, "allocs/op"); err == nil {
+				t.Fatalf("Resolve(%q, %q) should return error", kind, "allocs/op")
+			}
+
+			// Test that modifying SampleUnit makes Validate() return error
+			c.SampleUnit = "wrong"
+			if c.Validate() == nil {
+				t.Fatalf("After c.SampleUnit = \"wrong\", Validate() should return error, got nil")
+			}
+
+			// Test Resolve("", "ns/op") returns CPU, not the contention kind
+			cpuConfig, err := Resolve("", "ns/op")
+			if err != nil {
+				t.Fatalf("Resolve(%q, %q): %v", "", "ns/op", err)
+			}
+			if cpuConfig.Profile != CPU {
+				t.Fatalf("Resolve(%q, %q).Profile = %q, want %q", "", "ns/op", cpuConfig.Profile, CPU)
+			}
+		})
+	}
+}

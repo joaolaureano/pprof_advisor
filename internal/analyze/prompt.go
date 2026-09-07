@@ -63,34 +63,75 @@ var noVars = map[string]string{}
 // for — and the guard metric then rejects it, a whole capture-apply-verify
 // cycle spent discovering that the prompt was wrong.
 //
+// For a contention profile, the objective remains ns/op (reducing wall-clock time)
+// because that is what the benchmark measures and what the patch will be tested on.
+// The profile and mechanisms change to describe the contention pattern rather than
+// the typical path.
+//
 // The wording itself lives in the catalog, so what the tool says can be read
 // and changed in one place without recompiling.
 func systemPrompt(cat *prompt.Catalog, cfg measurement.Config) (string, error) {
-	// The two objectives select parallel sets of fragments, so the suffix picks
-	// the variant and the unit is only needed by the ones that name it.
-	suffix, vars := "cpu", noVars
-	if cfg.Profile == measurement.Memory {
-		suffix, vars = "memory", map[string]string{"unit": cfg.Unit}
+	// Three objectives select parallel sets of fragments. Determine the suffix
+	// and build vars maps for each fragment separately, since not all fragments
+	// need the same variables.
+	var suffix string
+	switch cfg.Profile {
+	case measurement.CPU:
+		suffix = "cpu"
+	case measurement.Memory:
+		suffix = "memory"
+	case measurement.Block, measurement.Mutex:
+		suffix = "contention"
 	}
-	part := map[string]string{}
-	for _, name := range []string{"profile", "objective", "mechanisms", "guard"} {
-		v := noVars
-		switch name {
-		case "objective", "guard":
-			v = vars
-		}
-		s, err := cat.Render("system."+name+"."+suffix, v)
-		if err != nil {
-			return "", err
-		}
-		part[name] = s
+
+	// Render each fragment with its own appropriate vars.
+	profileVars := map[string]string{}
+	if suffix == "contention" {
+		profileVars["kind"] = string(cfg.Profile)
 	}
+
+	profileStr, err := cat.Render("system.profile."+suffix, profileVars)
+	if err != nil {
+		return "", err
+	}
+
+	objectiveVars := map[string]string{}
+	if suffix == "memory" {
+		objectiveVars["unit"] = cfg.Unit
+	}
+
+	objectiveStr, err := cat.Render("system.objective."+suffix, objectiveVars)
+	if err != nil {
+		return "", err
+	}
+
+	mechanismsStr, err := cat.Render("system.mechanisms."+suffix, noVars)
+	if err != nil {
+		return "", err
+	}
+
+	guardVars := map[string]string{}
+	if suffix == "memory" {
+		guardVars["unit"] = cfg.Unit
+	}
+
+	guardStr, err := cat.Render("system.guard."+suffix, guardVars)
+	if err != nil {
+		return "", err
+	}
+
+	scopeStr, err := cat.Render("system.scope."+suffix, noVars)
+	if err != nil {
+		return "", err
+	}
+
 	return cat.Render("system.base", map[string]string{
-		"profile":    part["profile"],
-		"objective":  part["objective"],
+		"profile":    profileStr,
+		"objective":  objectiveStr,
 		"unit":       cfg.Unit,
-		"guard":      part["guard"],
-		"mechanisms": part["mechanisms"],
+		"guard":      guardStr,
+		"mechanisms": mechanismsStr,
+		"scope":      scopeStr,
 	})
 }
 
@@ -107,9 +148,16 @@ func buildUserPrompt(cat *prompt.Catalog, r *schema.ExtractResult, module string
 	cfg := r.Profile.Measurement
 	cost := measurement.Coster(cfg)
 
-	kind := "CPU"
-	if cfg.Profile == measurement.Memory {
+	var kind string
+	switch cfg.Profile {
+	case measurement.CPU:
+		kind = "CPU"
+	case measurement.Memory:
 		kind = "Memory"
+	case measurement.Block:
+		kind = "Block contention"
+	case measurement.Mutex:
+		kind = "Mutex contention"
 	}
 	out.put("user.header", map[string]string{"kind": kind})
 	out.put("user.profile_line", map[string]string{"path": r.Profile.Path})
@@ -126,7 +174,17 @@ func buildUserPrompt(cat *prompt.Catalog, r *schema.ExtractResult, module string
 	if cfg.Attribution == "first_focus_frame" {
 		// Without this the model reads "self" as "allocated by its own
 		// statements" and goes looking for a make() that is one frame down.
-		out.put("user.attribution_note", noVars)
+		// For memory profiles, note that allocations are charged to user code.
+		// For contention profiles, note that blocking events are charged to user code.
+		if cfg.Profile == measurement.Memory {
+			out.put("user.attribution_note.memory", noVars)
+		} else {
+			out.put("user.attribution_note.contention", noVars)
+		}
+		// For contention profiles, also emit a note about summed wall-clock time.
+		if cfg.Profile == measurement.Block || cfg.Profile == measurement.Mutex {
+			out.put("user.contention_note", noVars)
+		}
 	}
 	if module != "" {
 		out.put("user.module_line", map[string]string{"module": module})

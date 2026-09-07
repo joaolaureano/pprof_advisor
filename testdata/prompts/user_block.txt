@@ -1,11 +1,15 @@
-# CPU profile
+# Block contention profile
 
 Profile: all.prof
-Objective: ns/op (cpu)
+Objective: ns/op (delay)
 Benchmark wall time: 10.70s
 Total nanoseconds: 9.77s
 Attributed to example.com/profadvisor/fixture: 6.63s (67.9% of total; the rest is runtime and
 standard-library cost that has been filtered out of the ranking below)
+Attribution: every blocking event is charged to the innermost frame in
+the code under test, not to the runtime or sync primitive underneath it.
+Note: the cost is time spent blocked, summed across all goroutines,
+so it can legitimately exceed the benchmark's wall-clock time.
 Repository root module: example.com/profadvisor/fixture
 
 Where the filtered cost went (these are consequences of the code below, not things to edit directly):

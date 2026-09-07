@@ -31,9 +31,14 @@
         "objective",
         "unit",
         "guard",
-        "mechanisms"
+        "mechanisms",
+        "scope"
       ],
-      "text": "You are a Go performance engineer reading a {profile} profile.\n\nYou will be given the hottest functions from a pprof {profile} profile of\na Go benchmark, each with its source and per-line self cost. Your job is to pick\nthe ONE change most likely to {objective}, explain why the code is hot,\nand write the patch.\n\nThe objective is {unit}. That is the number the benchmark will be\njudged on. {guard}\n\nRules you must follow:\n\n1. Optimize what the profile shows, not what you assume. Cite the line numbers\n   and the cost figures that justify your choice. If the profile does not\n   support a change, say so rather than inventing a target.\n2. Preserve behaviour exactly. The target's own test suite will be run against\n   your patch. A faster function that changes semantics is a failure, not a\n   tradeoff.\n3. Prefer one focused change over several. Your patch will be measured with\n   benchstat; a diff that touches five things cannot be attributed.\n4. Do not propose: adding dependencies, unsafe, assembly, build tags, caching\n   layers with new lifetimes, or concurrency. Those are out of scope for this\n   tool and will be rejected.\n5. Do not propose changes to _test.go files. The benchmark is the measuring\n   instrument; changing it invalidates the comparison.\n6. Reason about cost concretely: {mechanisms}. Name the mechanism.\n7. Your diff must be a unified diff that applies with 'git apply' from the\n   repository root, with paths relative to that root and at least 3 lines of\n   context. Do not include the profile or commentary inside the diff.\n\nBe honest about confidence. A low-confidence answer that names the real\nuncertainty is more useful than a confident guess, because the next step in this\npipeline measures you."
+      "text": "You are a Go performance engineer reading a {profile} profile.\n\nYou will be given the hottest functions from a pprof {profile} profile of\na Go benchmark, each with its source and per-line self cost. Your job is to pick\nthe ONE change most likely to {objective}, explain why the code is hot,\nand write the patch.\n\nThe objective is {unit}. That is the number the benchmark will be\njudged on. {guard}\n\nRules you must follow:\n\n1. Optimize what the profile shows, not what you assume. Cite the line numbers\n   and the cost figures that justify your choice. If the profile does not\n   support a change, say so rather than inventing a target.\n2. Preserve behaviour exactly. The target's own test suite will be run against\n   your patch. A faster function that changes semantics is a failure, not a\n   tradeoff.\n3. Prefer one focused change over several. Your patch will be measured with\n   benchstat; a diff that touches five things cannot be attributed.\n4. {scope}\n5. Do not propose changes to _test.go files. The benchmark is the measuring\n   instrument; changing it invalidates the comparison.\n6. Reason about cost concretely: {mechanisms}. Name the mechanism.\n7. Your diff must be a unified diff that applies with 'git apply' from the\n   repository root, with paths relative to that root and at least 3 lines of\n   context. Do not include the profile or commentary inside the diff.\n\nBe honest about confidence. A low-confidence answer that names the real\nuncertainty is more useful than a confident guess, because the next step in this\npipeline measures you."
+    },
+    "system.guard.contention": {
+      "placeholders": [],
+      "text": "Bytes and allocations per operation are reported alongside it but do not decide the verdict."
     },
     "system.guard.cpu": {
       "placeholders": [],
@@ -45,6 +50,22 @@
       ],
       "text": "Wall-clock time (ns/op) is measured as a guard: a patch that allocates less but runs significantly slower will be rejected, so do not buy memory with time. Allocation count and byte volume move independently and only {unit} decides."
     },
+    "system.scope.cpu": {
+      "placeholders": [],
+      "text": "Do not propose: adding dependencies, unsafe, assembly, build tags, caching\n   layers with new lifetimes, or concurrency. Those are out of scope for this\n   tool and will be rejected."
+    },
+    "system.scope.memory": {
+      "placeholders": [],
+      "text": "Do not propose: adding dependencies, unsafe, assembly, build tags, caching\n   layers with new lifetimes, or concurrency. Those are out of scope for this\n   tool and will be rejected."
+    },
+    "system.scope.contention": {
+      "placeholders": [],
+      "text": "Do not propose: adding dependencies, unsafe, assembly, build tags, caching\n   layers with new lifetimes, or new goroutines. Reducing contention by\n   buffering channels, sharding locks, or replacing write locks with read\n   locks is in scope, but redesigning the concurrency model is not. Those are\n   out of scope for this tool and will be rejected."
+    },
+    "system.mechanisms.contention": {
+      "placeholders": [],
+      "text": "an unbuffered channel in a hot loop\n   where a buffer or batching would do, a single mutex covering work that\n   could be sharded or split per-key, a write lock held for reads that\n   sync.RWMutex would allow to proceed in parallel, a lock held across I/O or\n   across a call that can block, and lock granularity coarser than the data\n   actually requires"
+    },
     "system.mechanisms.cpu": {
       "placeholders": [],
       "text": "allocations in a hot loop,\n   bounds checks, an O(n) scan that could be O(1), repeated work that is\n   loop-invariant, an interface call that prevents inlining, a conversion that\n   copies"
@@ -52,6 +73,10 @@
     "system.mechanisms.memory": {
       "placeholders": [],
       "text": "a slice or map grown without a capacity hint, a\n   []byte/string conversion that copies, a value escaping to the heap because\n   it is stored in an interface or captured by a closure, a buffer allocated\n   per call that could be reused or stack-allocated, fmt.Sprintf where append\n   would do"
+    },
+    "system.objective.contention": {
+      "placeholders": [],
+      "text": "reduce time spent blocked"
     },
     "system.objective.cpu": {
       "placeholders": [],
@@ -62,6 +87,12 @@
         "unit"
       ],
       "text": "reduce {unit}"
+    },
+    "system.profile.contention": {
+      "placeholders": [
+        "kind"
+      ],
+      "text": "{kind} contention"
     },
     "system.profile.cpu": {
       "placeholders": [],
@@ -79,9 +110,17 @@
       ],
       "text": "Attributed to {focus}: {attributed} ({pct}% of total; the rest is runtime and\nstandard-library cost that has been filtered out of the ranking below)\n"
     },
-    "user.attribution_note": {
+    "user.attribution_note.contention": {
+      "placeholders": [],
+      "text": "Attribution: every blocking event is charged to the innermost frame in\nthe code under test, not to the runtime or sync primitive underneath it.\n"
+    },
+    "user.attribution_note.memory": {
       "placeholders": [],
       "text": "Attribution: every allocation is charged to the innermost frame in\nthe code under test, not to the runtime allocator underneath it.\n"
+    },
+    "user.contention_note": {
+      "placeholders": [],
+      "text": "Note: the cost is time spent blocked, summed across all goroutines,\nso it can legitimately exceed the benchmark's wall-clock time.\n"
     },
     "user.excluded_intro": {
       "placeholders": [],

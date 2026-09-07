@@ -7,8 +7,9 @@
 // run, or the diagnosis and the verdict are about different programs.
 //
 // Which profile is written follows from the measurement: -cpuprofile for a CPU
-// run, -memprofile for a memory one. -benchmem is always on, whatever the
-// objective, because verify needs ns/op, B/op and allocs/op from the same
+// run, -memprofile for a memory one, -blockprofile for a block contention run,
+// and -mutexprofile for a mutex contention run. -benchmem is always on, whatever
+// the objective, because verify needs ns/op, B/op and allocs/op from the same
 // output in order to guard one against the other.
 package capture
 
@@ -17,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/joaolaureano/profadvisor/internal/benchmark"
@@ -44,6 +46,15 @@ type Options struct {
 	// Benchtime is -benchtime, e.g. "1s" or "2000x". Empty leaves it to the
 	// go tool's default.
 	Benchtime string
+	// Rate is the sampling detail for a contention profile: -blockprofilerate
+	// for a block run, -mutexprofilefraction for a mutex one. Zero means 1,
+	// which is the go tool's own default and records every event. It is
+	// ignored for cpu and memory profiles, which have no such knob. Recording
+	// every blocking event adds overhead that inflates ns/op, so the absolute
+	// numbers from a contention capture are not comparable with a clean run —
+	// but baseline and after are captured with identical flags, so the verdict
+	// stays valid.
+	Rate int
 	// OutDir is the root under which a timestamped directory is created.
 	// Empty means "./profadvisor-out".
 	OutDir string
@@ -70,10 +81,36 @@ type Result struct {
 
 // profileFile is the name written under the capture directory, per profile kind.
 func profileFile(kind measurement.Kind) string {
-	if kind == measurement.Memory {
+	switch kind {
+	case measurement.Memory:
 		return "mem.prof"
+	case measurement.Block:
+		return "block.prof"
+	case measurement.Mutex:
+		return "mutex.prof"
+	default:
+		return "cpu.prof"
 	}
-	return "cpu.prof"
+}
+
+// profileFlags builds the go test flags that write the profile this
+// measurement calls for. For contention profiles (block and mutex), the rate
+// flag is separate because it only applies to those kinds and must be
+// normalized to 1 if unset to match go tool defaults.
+func profileFlags(cfg measurement.Config, rate int, path string) []string {
+	if rate <= 0 {
+		rate = 1
+	}
+	switch cfg.Profile {
+	case measurement.Memory:
+		return []string{"-memprofile", path}
+	case measurement.Block:
+		return []string{"-blockprofile", path, "-blockprofilerate", strconv.Itoa(rate)}
+	case measurement.Mutex:
+		return []string{"-mutexprofile", path, "-mutexprofilefraction", strconv.Itoa(rate)}
+	default:
+		return []string{"-cpuprofile", path}
+	}
 }
 
 // Run executes the benchmark and writes the artifacts.
@@ -119,11 +156,6 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		BenchPath:   filepath.Join(dir, "bench.txt"),
 	}
 
-	flag := "-cpuprofile"
-	if cfg.Profile == measurement.Memory {
-		flag = "-memprofile"
-	}
-
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -139,7 +171,7 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		Count:        count,
 		Benchtime:    opts.Benchtime,
 		Benchmem:     true,
-		ProfileFlags: []string{flag, filepath.Join(absDir, name)},
+		ProfileFlags: profileFlags(cfg, opts.Rate, filepath.Join(absDir, name)),
 		BinaryPath:   filepath.Join(absDir, "pkg.test"),
 	})
 	if out != nil {
@@ -158,8 +190,15 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 		if bench == "" {
 			bench = "."
 		}
-		return res, fmt.Errorf("capture: no profile at %s — did any benchmark match %q?",
-			res.ProfilePath, bench)
+		// A contention profile has a second cause, and on a first attempt the
+		// likelier one: the benchmark matched and ran, and simply never
+		// blocked, so there was nothing for the runtime to record.
+		question := "?"
+		if cfg.Profile == measurement.Block || cfg.Profile == measurement.Mutex {
+			question = ", and did it ever block?"
+		}
+		return res, fmt.Errorf("capture: no profile at %s — did any benchmark match %q%s",
+			res.ProfilePath, bench, question)
 	}
 	return res, nil
 }

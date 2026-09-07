@@ -140,3 +140,156 @@ func TestWrongProfileKindIsRejected(t *testing.T) {
 		t.Fatalf("error = %v, want no alloc_space sample type", err)
 	}
 }
+
+// TestBlockProfileChargesTheCodeUnderTest verifies that block contention profiles
+// are read correctly and hotspots are ranked by the code under test, not by
+// runtime primitives. This is critical: a contention sample's leaf frame is
+// always in runtime or sync, never the code that caused the contention. The
+// first_focus_frame attribution redirects cost to the innermost frame inside the
+// focus package, making the ranking useful. Without this, all top hotspots would
+// be sync.(*Mutex).Lock, which is not code the user can edit.
+func TestBlockProfileChargesTheCodeUnderTest(t *testing.T) {
+	cfg, err := measurement.Resolve(measurement.Block, "ns/op")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := load(t, "block.prof", Options{Measurement: cfg, TopN: 5})
+	if len(result.Hotspots) == 0 {
+		t.Fatal("no hotspots returned")
+	}
+
+	// Verify that at least one hotspot is from the code under test.
+	found := false
+	for _, hotspot := range result.Hotspots {
+		if strings.HasPrefix(hotspot.Function, "example.com/contend.") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		var names []string
+		for _, hotspot := range result.Hotspots {
+			names = append(names, hotspot.Function)
+		}
+		t.Fatalf("no hotspots from example.com/contend in ranking: %v", names)
+	}
+
+	// Verify that no hotspot is a runtime or sync frame. These are the leaf
+	// frames of contention samples and should never appear in the ranking.
+	for _, hotspot := range result.Hotspots {
+		if strings.HasPrefix(hotspot.Function, "runtime.") {
+			t.Errorf("runtime hotspot should not be ranked: %q", hotspot.Function)
+		}
+		if strings.HasPrefix(hotspot.Function, "sync.") {
+			t.Errorf("sync hotspot should not be ranked: %q", hotspot.Function)
+		}
+	}
+
+	// Verify that no hotspot is a benchmark harness function, which the
+	// harnessFunction filter should have removed.
+	for _, hotspot := range result.Hotspots {
+		if strings.Contains(hotspot.Function, ".Benchmark") {
+			t.Errorf("benchmark harness should not be ranked: %q", hotspot.Function)
+		}
+	}
+
+	// Verify the sample type and unit are correctly set to delay/nanoseconds.
+	if result.Profile.Measurement.SampleType != "delay" {
+		t.Errorf("sample type = %q, want delay", result.Profile.Measurement.SampleType)
+	}
+	if result.Profile.Measurement.SampleUnit != "nanoseconds" {
+		t.Errorf("sample unit = %q, want nanoseconds", result.Profile.Measurement.SampleUnit)
+	}
+
+	// Verify that total cost is non-zero, confirming the profile was actually read.
+	if result.Profile.Total <= 0 {
+		t.Errorf("total cost = %d, want > 0", result.Profile.Total)
+	}
+
+	// The assertions above would all hold even under "self" attribution, since
+	// noiseFunction drops the runtime and sync leaves from the ranking either
+	// way. What separates the two is where the cost lands: charged to the leaf,
+	// every nanosecond would be filtered out with it and the surviving frames
+	// would rank at zero. A non-zero cost on the top frame is therefore the
+	// assertion that actually pins first_focus_frame.
+	if result.Profile.Analyzed <= 0 {
+		t.Errorf("attributed cost = %d, want > 0: the blocked time was charged to frames that were then filtered out",
+			result.Profile.Analyzed)
+	}
+	if top := result.Hotspots[0]; top.Flat <= 0 {
+		t.Errorf("top hotspot %s has flat = %d, want > 0", top.Function, top.Flat)
+	}
+}
+
+// TestBlockProfileReportsTheFilteredPrimitives verifies that contention profiles
+// report which blocking primitives caused the cost, even though they are not
+// ranked as hotspots. The excluded list lets the reader see where the cost went,
+// which for a contention profile is the entire mechanism: sync.(*Mutex).Lock,
+// runtime.chanrecv, runtime.chansend, etc. Without this visibility, a reader
+// cannot understand what they are optimizing for.
+func TestBlockProfileReportsTheFilteredPrimitives(t *testing.T) {
+	cfg, err := measurement.Resolve(measurement.Block, "ns/op")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := load(t, "block.prof", Options{Measurement: cfg, TopN: 5})
+	if len(result.Profile.Excluded) == 0 {
+		t.Fatal("excluded list is empty, expected blocking primitives")
+	}
+
+	// Verify that at least one excluded frame is from the blocking primitives.
+	found := false
+	var names []string
+	for _, frame := range result.Profile.Excluded {
+		names = append(names, frame.Function)
+		if strings.HasPrefix(frame.Function, "sync.") || strings.HasPrefix(frame.Function, "runtime.") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("no sync or runtime frames in excluded list: %v", names)
+	}
+}
+
+// TestBlockProfileRejectsTheWrongMeasurement verifies that attempting to read a
+// block profile with a CPU measurement config fails with a clear error. This
+// catches the user mistake of pointing --profile=block at a CPU benchmark or
+// vice versa. A silent read of the wrong column is worse than a loud failure.
+func TestBlockProfileRejectsTheWrongMeasurement(t *testing.T) {
+	// Load block.prof with CPU measurement config; should fail because the
+	// profile does not have a "cpu" sample type.
+	cpuCfg, err := measurement.Resolve(measurement.CPU, "ns/op")
+	if err != nil {
+		t.Fatal(err)
+	}
+	blockProf, err := fixture.Load("block.prof")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = FromProfile(blockProf, "block.prof", Options{Measurement: cpuCfg})
+	if err == nil {
+		t.Fatal("expected error when reading block.prof with CPU config, got nil")
+	}
+	if !strings.Contains(err.Error(), "cpu") {
+		t.Errorf("error message should name the missing sample type 'cpu': %v", err)
+	}
+
+	// Load all.prof (CPU profile) with block measurement config; should fail
+	// because the profile does not have a "delay" sample type.
+	blockCfg, err := measurement.Resolve(measurement.Block, "ns/op")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cpuProf, err := fixture.Load(allProfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = FromProfile(cpuProf, allProfile, Options{Measurement: blockCfg})
+	if err == nil {
+		t.Fatal("expected error when reading all.prof with block config, got nil")
+	}
+	if !strings.Contains(err.Error(), "delay") {
+		t.Errorf("error message should name the missing sample type 'delay': %v", err)
+	}
+}
