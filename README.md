@@ -4,6 +4,10 @@ Finds a hot-path in **any** Go package that has benchmarks, asks a language mode
 how to fix it, and then measures whether the fix actually worked. It optimizes CPU time
 or memory allocation, chosen per run.
 
+It also answers a second, narrower question that needs no benchmark: what the Go
+compiler's escape analysis concluded about a package. See
+[Escape analysis](#escape-analysis).
+
 profadvisor is a standalone tool. It has no target of its own and knows nothing
 about the code it is pointed at: you give it a directory and a package pattern,
 and everything it reports comes from the profile and the benchmark output of
@@ -101,7 +105,53 @@ legitimately get a different answer from a different compiler.
 
 A diagnostic the parser does not recognize is never guessed at. It is preserved
 verbatim under `unrecognized` and counted, so a toolchain that has learned a new
-sentence is visible rather than silently dropped.
+sentence is visible rather than silently dropped. One finding looks like this:
+
+```json
+{
+  "kind": "moved_to_heap",
+  "package": "example.com/svc/pkg/wal",
+  "file": "pkg/wal/wal.go", "line": 203, "column": 6,
+  "subject": "cabecalho",
+  "function": "(*Log).Append",
+  "flow": [
+    { "text": "{heap} ← &cabecalho:" },
+    { "text": "cabecalho", "reason": "address-of",
+      "file": "pkg/wal/wal.go", "line": 207, "column": 36 },
+    { "text": "(*bufio.Writer).Write(l.buf, cabecalho[:])", "reason": "call parameter",
+      "file": "pkg/wal/wal.go", "line": 207, "column": 26 }
+  ],
+  "evidence": "pkg/wal/wal.go:203:6: moved to heap: cabecalho"
+}
+```
+
+That is a real record with one flow hop elided and the module path replaced; the
+`flow` is the compiler's own account of how the value reached the heap, read
+bottom-up.
+
+Match on `kind`. `evidence` is there so the record outlives any future change to
+how this is modelled, not so consumers can grep it.
+
+### What "covers the vocabulary" means here
+
+Passing on a corpus only proves the parser handles what that corpus happened to
+provoke, which is a weak guarantee: three conclusions are gated behind a compiler
+debug flag, and the warning the compiler prints when it abandons a flow at an
+assignment cycle appeared in neither the corpus nor a real nine-package service
+with 5868 diagnostic lines.
+
+So the inventory is transcribed from the format strings in
+`cmd/compile/internal/escape` and checked as a table —
+`TestParseCoversEveryCompilerTemplate`, 28 templates, each mapped to the kind it
+must produce or to the decision not to report it. Two things are outside it on
+purpose: the compiler's two hard errors, which fail the build instead of reaching
+a report, and the per-statement tracing, which needs `-m=3` while this tool fixes
+`-m=2`.
+
+That inventory is a snapshot of one release. A newer toolchain than the parser
+was validated against is reported in `warnings` and still parsed, and anything
+genuinely new lands in `unrecognized` — the guarantee is that a gap announces
+itself, not that gaps cannot happen.
 
 ## Scope
 
@@ -156,3 +206,7 @@ conclusion, plus that compiler's recorded output. The parser tests run against
 the recording and need no toolchain; one further test runs the real compiler and
 compares. After a Go upgrade, that comparison is what tells you the wording
 moved — re-record with `go test ./internal/escape -update` and read the diff.
+
+Those recordings prove the parser handles real output; the template table
+described above proves it handles output the fixtures never produced. Both are
+needed, and neither substitutes for the other.
