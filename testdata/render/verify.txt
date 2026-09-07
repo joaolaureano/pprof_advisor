@@ -1,0 +1,13 @@
+Verification
+  Verdict:        MELHOROU
+  Objective:      ns/op (cpu)
+
+BENCHMARK              ROLE       UNIT       BASELINE         AFTER    DELTA%         P  VERDICT
+BenchmarkSomeFunction  objective  ns/op        100.50         85.30     -15.2    0.0005  MELHOROU
+BenchmarkSomeFunction  guard      B/op         512.00        512.00       0.0  (1.0000)  SEM DIFERENÇA
+
+A p-value in parentheses was not significant at the chosen alpha.
+Only the objective and its guards decide the verdict; guards can veto, never accept.
+
+Warnings:
+  Sample size is small; consider increasing -count

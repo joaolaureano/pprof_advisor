@@ -1,0 +1,61 @@
+Run
+  Schema version: 3
+  Objective:      ns/op (cpu)
+  Duration:       40.00s
+
+== Baseline capture ==
+
+Capture Result
+  Dir:            out/20260907T120000.000Z
+  Objective:      ns/op (cpu)
+  Profile:        out/20260907T120000.000Z/cpu.prof
+  Benchmark:      out/20260907T120000.000Z/bench.txt
+  Duration:       12s
+  Command:        go test ./... -bench .
+
+== Hotspots ==
+
+did not run
+
+== Diagnosis ==
+
+Diagnosis
+  Provider:       acme
+  Model:          m-1
+  Objective:      ns/op (cpu)
+  Target:         pkg.Fn
+  Cause:          linear scan
+  Change:         index it
+  Confidence:     medium
+  Risks:
+    - ordering
+
+Diff:
+--- a/x.go
++++ b/x.go
+@@ -1 +1 @@
+-a
++b
+
+== Applied ==
+
+Apply Result
+  Branch:         profadvisor/suggestion-1
+  Base ref:       main
+  Commit:         abc1234
+  Files changed:  1
+    x.go
+
+== Re-capture ==
+
+Capture Result
+  Dir:            out/20260907T120500.000Z
+  Objective:      ns/op (cpu)
+  Profile:        out/20260907T120500.000Z/cpu.prof
+  Benchmark:      out/20260907T120500.000Z/bench.txt
+  Duration:       11s
+  Command:        go test ./... -bench .
+
+== Next ==
+
+profadvisor verify --baseline out/20260907T120000.000Z/bench.txt --after out/20260907T120500.000Z/bench.txt

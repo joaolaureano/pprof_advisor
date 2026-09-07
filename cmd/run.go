@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/joaolaureano/profadvisor/internal/pipeline"
-	"github.com/joaolaureano/profadvisor/internal/schema"
 	"github.com/spf13/cobra"
 )
 
@@ -13,18 +12,16 @@ func newRunCmd() *cobra.Command {
 	var mo modelOptions
 	c := &cobra.Command{
 		Use:   "run --pkg <pattern> --dir <repo>",
-		Short: "Capture, diagnose, apply, re-measure, and judge",
-		Long: "Runs the whole loop and reports whether the change survived " +
-			"measurement.\n\nThe objective is chosen with --profile and --unit and is " +
+		Short: "Capture, diagnose, apply, and re-measure",
+		Long: "Runs the analysis pipeline to suggest and measure an optimization.\n\n" +
+			"The objective is chosen with --profile and --unit and is " +
 			"pushed into every stage, so the profile that is read, the patch that is " +
-			"asked for, and the metric that decides are all the same one.\n\n" +
-			"The suggestion branch is kept whatever the verdict, and " +
-			"the repository is left on the branch you started from. Progress goes to " +
-			"stderr; the full record — every intermediate artifact — goes to stdout " +
-			"as JSON, so a disappointing verdict can be investigated without " +
-			"repeating the work.\n\n" +
-			"Exit code is 0 when the change was accepted or neutral, 2 when it made " +
-			"things slower.",
+			"asked for, and the measurements are all for the same metric.\n\n" +
+			"The suggestion branch is kept for inspection and the repository is left " +
+			"on the branch you started from. Progress goes to stderr; the full record — " +
+			"every intermediate artifact — goes to stdout as JSON.\n\n" +
+			"To decide whether the change is an improvement, pass the baseline and after " +
+			"benchmark paths from the result to the verify subcommand.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			client, cat, err := mo.client()
@@ -39,13 +36,7 @@ func newRunCmd() *cobra.Command {
 			if err := emit(cmd, res); err != nil {
 				return err
 			}
-			if runErr != nil {
-				return runErr
-			}
-			if res.Verification != nil && res.Verification.Verdict == schema.VerdictRegressed {
-				return errRegressed
-			}
-			return nil
+			return runErr
 		},
 	}
 	f := c.Flags()
@@ -58,7 +49,6 @@ func newRunCmd() *cobra.Command {
 	f.DurationVar(&opts.Capture.Timeout, "timeout", 20*time.Minute, "per-capture timeout")
 	f.IntVar(&opts.Extract.TopN, "top", 10, "hotspots to send to the model")
 	f.StringVar(&opts.Analyze.Module, "module", "", "target module path, for diff paths")
-	f.Float64Var(&opts.Verify.Alpha, "alpha", 0.05, "significance level")
 	measurementFlags(c, &opts.Profile, &opts.Unit)
 	modelFlags(c, &mo)
 	_ = c.MarkFlagRequired("pkg")

@@ -1,10 +1,7 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/joaolaureano/profadvisor/internal/measurement"
-	"github.com/joaolaureano/profadvisor/internal/schema"
 	"github.com/joaolaureano/profadvisor/internal/verify"
 	"github.com/spf13/cobra"
 )
@@ -27,8 +24,8 @@ func newVerifyCmd() *cobra.Command {
 			"is reported and votes on nothing.\n\nThe inputs are benchmark output, " +
 			"not profiles: a p-value needs N samples of the metric, and a profile says " +
 			"where the cost went, not how much there was. Capture both sides with " +
-			"--count 10 or higher.\n\nExit code is 0 for MELHOROU and SEM DIFERENÇA, " +
-			"2 for PIOROU, so a CI job can gate on it.",
+			"--count 10 or higher.\n\nThe verdict is in the JSON document; exit code " +
+			"is 0 for success (the tool ran and the JSON is complete) or 1 for failure.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := measurement.Resolve(profile, unit)
@@ -40,13 +37,7 @@ func newVerifyCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := emit(cmd, res); err != nil {
-				return err
-			}
-			if res.Verdict == schema.VerdictRegressed {
-				return errRegressed
-			}
-			return nil
+			return emit(cmd, res)
 		},
 	}
 	f := c.Flags()
@@ -58,9 +49,3 @@ func newVerifyCmd() *cobra.Command {
 	_ = c.MarkFlagRequired("after")
 	return c
 }
-
-// errRegressed is returned so `verify` exits non-zero on a regression while
-// still having written its JSON. It is recognised by Execute, which maps it to
-// exit code 2 rather than treating it as a tool failure — the tool worked, the
-// change did not.
-var errRegressed = fmt.Errorf("benchmark regressed")

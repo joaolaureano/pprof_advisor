@@ -1,0 +1,7 @@
+Capture Result
+  Dir:            /tmp/profadvisor-out/20240101T120000.000Z
+  Objective:      ns/op (cpu)
+  Profile:        /tmp/profadvisor-out/20240101T120000.000Z/cpu.prof
+  Benchmark:      /tmp/profadvisor-out/20240101T120000.000Z/bench.txt
+  Duration:       30s
+  Command:        go test -bench . -benchmem -count 10

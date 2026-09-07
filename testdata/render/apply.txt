@@ -1,0 +1,7 @@
+Apply Result
+  Branch:         profadvisor-suggestion
+  Base ref:       main
+  Commit:         abc123def456
+  Files changed:  2
+    pkg/file.go
+    pkg/file_test.go

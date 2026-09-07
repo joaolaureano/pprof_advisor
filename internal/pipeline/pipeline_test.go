@@ -15,6 +15,7 @@ import (
 	"github.com/joaolaureano/profadvisor/internal/extract"
 	"github.com/joaolaureano/profadvisor/internal/llm"
 	"github.com/joaolaureano/profadvisor/internal/schema"
+	"github.com/joaolaureano/profadvisor/internal/verify"
 )
 
 // The package under test: a deliberately slow lookup, and a benchmark that
@@ -132,9 +133,11 @@ func seedRepo(t *testing.T) string {
 	return dir
 }
 
-// TestPipelineAcceptsARealImprovement is the end-to-end claim of this tool: a
-// change is only accepted because it was measured, twice, on the same machine.
-func TestPipelineAcceptsARealImprovement(t *testing.T) {
+// TestPipelineProducesArtifactsThatVerifyAsAnImprovement proves that the
+// artifacts produced by the pipeline can be verified as an improvement using
+// verify.FromFiles. This is the end-to-end claim: a change is only accepted
+// because it was measured, twice, on the same machine.
+func TestPipelineProducesArtifactsThatVerifyAsAnImprovement(t *testing.T) {
 	if testing.Short() {
 		t.Skip("runs two full benchmark suites")
 	}
@@ -155,11 +158,14 @@ func TestPipelineAcceptsARealImprovement(t *testing.T) {
 		t.Fatalf("Run: %v\nprogress:\n%s", err, progress.String())
 	}
 
-	if !res.Accepted {
-		t.Errorf("Accepted = false, verdict %q", res.Verification.Verdict)
+	// Verify the artifacts using verify.FromFiles
+	verification, err := verify.FromFiles(res.Baseline.BenchPath, res.After.BenchPath, verify.Options{Measurement: res.Measurement})
+	if err != nil {
+		t.Fatalf("verify.FromFiles: %v", err)
 	}
-	if res.Verification.Verdict != schema.VerdictImproved {
-		t.Errorf("verdict = %q, want %q", res.Verification.Verdict, schema.VerdictImproved)
+
+	if verification.Verdict != schema.VerdictImproved {
+		t.Errorf("verdict = %q, want %q", verification.Verdict, schema.VerdictImproved)
 	}
 	if got := res.Applied.Branch; got != "profadvisor/suggestion-1" {
 		t.Errorf("branch = %q", got)
@@ -176,11 +182,11 @@ func TestPipelineAcceptsARealImprovement(t *testing.T) {
 
 	// Every artifact is in the record, so a verdict can be investigated.
 	if res.Baseline == nil || res.Hotspots == nil || res.Diagnosis == nil ||
-		res.Applied == nil || res.After == nil || res.Verification == nil {
+		res.Applied == nil || res.After == nil {
 		t.Error("result is missing an intermediate artifact")
 	}
 	t.Logf("progress:\n%s", progress.String())
-	for _, c := range res.Verification.Comparisons {
+	for _, c := range verification.Comparisons {
 		t.Logf("%s: %.1f -> %.1f (%+.1f%%, p=%.4f) %s",
 			c.Name, c.BaselineCenter, c.AfterCenter, c.DeltaPct, c.PValue, c.Verdict)
 	}
@@ -206,12 +212,14 @@ index a2617dc..a3b21f4 100644
  	}
 `
 
-// TestPipelineRejectsAPlausibleButWorseChange is the other half of the claim.
-// A tool that only ever confirms is not measuring anything, so the rejection of
-// a change that looks like an optimization has to be tested as deliberately as
-// the acceptance. This one is not merely neutral — it regresses, and the
-// pipeline is expected to say so rather than take the diff at face value.
-func TestPipelineRejectsAPlausibleButWorseChange(t *testing.T) {
+// TestPipelineProducesArtifactsThatVerifyAsARegression proves that the
+// artifacts produced by the pipeline can be verified as a regression. This is
+// the other half of the claim: a tool that only ever confirms is not measuring
+// anything, so the rejection of a change that looks like an optimization must
+// be tested as deliberately as the acceptance. This one is not merely neutral —
+// it regresses, and verify.FromFiles is expected to say so rather than take the
+// diff at face value.
+func TestPipelineProducesArtifactsThatVerifyAsARegression(t *testing.T) {
 	if testing.Short() {
 		t.Skip("runs two full benchmark suites")
 	}
@@ -231,13 +239,17 @@ func TestPipelineRejectsAPlausibleButWorseChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v\nprogress:\n%s", err, progress.String())
 	}
-	if res.Accepted {
-		t.Error("a cosmetic rewrite was accepted as an improvement")
+
+	// Verify the artifacts using verify.FromFiles
+	verification, err := verify.FromFiles(res.Baseline.BenchPath, res.After.BenchPath, verify.Options{Measurement: res.Measurement})
+	if err != nil {
+		t.Fatalf("verify.FromFiles: %v", err)
 	}
-	if res.Verification.Verdict == schema.VerdictImproved {
-		t.Errorf("verdict = %q; the change is not faster", res.Verification.Verdict)
+
+	if verification.Verdict == schema.VerdictImproved {
+		t.Errorf("verdict = %q; the change is not faster", verification.Verdict)
 	}
-	for _, c := range res.Verification.Comparisons {
+	for _, c := range verification.Comparisons {
 		t.Logf("%s: %+.1f%% (p=%.4f) %s", c.Name, c.DeltaPct, c.PValue, c.Verdict)
 	}
 }

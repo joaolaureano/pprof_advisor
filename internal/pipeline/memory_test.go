@@ -11,6 +11,7 @@ import (
 	"github.com/joaolaureano/profadvisor/internal/capture"
 	"github.com/joaolaureano/profadvisor/internal/measurement"
 	"github.com/joaolaureano/profadvisor/internal/schema"
+	"github.com/joaolaureano/profadvisor/internal/verify"
 )
 
 const memorySource = `package slowpkg
@@ -69,12 +70,12 @@ func TestMemoryPipeline(t *testing.T) {
 	slow := strings.Replace(optimized, "\tfor _, value := range data {\n\t\ttotal += int(value)\n\t}", "\tfor repeat := 0; repeat < 1000; repeat++ {\n\t\ttotal = 0\n\t\tfor _, value := range data { total += int(value) }\n\t}", 1)
 	for _, tc := range []struct {
 		name, source string
-		wantAccepted bool
+		wantVerdict  string
 		wantError    bool
 	}{
-		{"improvement", optimized, true, false},
-		{"cpu_regression", slow, false, false},
-		{"after_compile_failure", strings.Replace(optimized, "return total", "return undefined", 1), false, true},
+		{"improvement", optimized, schema.VerdictImproved, false},
+		{"cpu_regression", slow, schema.VerdictRegressed, false},
+		{"after_compile_failure", strings.Replace(optimized, "return total", "return undefined", 1), "", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir, diff := memoryRepo(t, tc.source)
@@ -87,25 +88,26 @@ func TestMemoryPipeline(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				wantVerdict := schema.VerdictImproved
-				if !tc.wantAccepted {
-					wantVerdict = schema.VerdictRegressed
+				// Verify the artifacts using verify.FromFiles
+				verification, err := verify.FromFiles(res.Baseline.BenchPath, res.After.BenchPath, verify.Options{Measurement: res.Measurement})
+				if err != nil {
+					t.Fatalf("verify.FromFiles: %v", err)
 				}
-				if res.Accepted != tc.wantAccepted || res.Verification.Verdict != wantVerdict {
-					t.Fatalf("verification: %+v", res.Verification)
+				if verification.Verdict != tc.wantVerdict {
+					t.Fatalf("verdict = %q, want %q", verification.Verdict, tc.wantVerdict)
 				}
-				if res.Measurement.Profile != measurement.Memory || res.Diagnosis.Measurement != res.Measurement || res.Hotspots.Profile.Measurement != res.Measurement || res.Verification.Measurement != res.Measurement {
+				if res.Measurement.Profile != measurement.Memory || res.Diagnosis.Measurement != res.Measurement || res.Hotspots.Profile.Measurement != res.Measurement || verification.Measurement != res.Measurement {
 					t.Fatal("measurement lost between stages")
 				}
 				var objective, guard bool
-				for _, c := range res.Verification.Comparisons {
+				for _, c := range verification.Comparisons {
 					objective = objective || c.Unit == "B/op" && c.Role == measurement.Objective && c.Verdict == schema.VerdictImproved
-					guard = guard || c.Unit == "ns/op" && c.Role == measurement.Guard && ((c.Verdict != schema.VerdictRegressed) == tc.wantAccepted)
+					guard = guard || c.Unit == "ns/op" && c.Role == measurement.Guard && ((c.Verdict != schema.VerdictRegressed) == (tc.wantVerdict == schema.VerdictImproved))
 				}
 				if !objective || !guard {
-					t.Fatalf("missing objective or CPU protection: %+v", res.Verification)
+					t.Fatalf("missing objective or CPU protection: %+v", verification)
 				}
-			} else if err == nil || res.Accepted || res.Applied == nil {
+			} else if err == nil || res.Applied == nil {
 				t.Fatalf("expected failure after apply: %+v, %v", res, err)
 			}
 			if got := gitOut(t, dir, "rev-parse", "--abbrev-ref", "HEAD"); got != base {

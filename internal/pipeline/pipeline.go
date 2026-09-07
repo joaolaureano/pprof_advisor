@@ -1,5 +1,6 @@
-// Package pipeline runs the five steps in order and decides what the result
-// means.
+// Package pipeline runs the five steps in order: capture, extract, analyze,
+// apply, and re-capture. It produces the full record of artifacts and leaves
+// the verdict for the caller to decide with the verify subcommand.
 //
 // The ordering is the whole design: the change is measured against a baseline
 // captured from the same tree, on the same machine, minutes apart. Comparing
@@ -19,7 +20,6 @@ import (
 	"github.com/joaolaureano/profadvisor/internal/extract"
 	"github.com/joaolaureano/profadvisor/internal/measurement"
 	"github.com/joaolaureano/profadvisor/internal/schema"
-	"github.com/joaolaureano/profadvisor/internal/verify"
 )
 
 // Options configures one end-to-end run.
@@ -36,14 +36,15 @@ type Options struct {
 	Extract extract.Options
 	Analyze analyze.Options
 	Apply   apply.Options
-	Verify  verify.Options
 	// Progress receives one human-readable line per step. It is not the
 	// result — that is the returned Result, as JSON. Nil discards.
 	Progress io.Writer
 }
 
-// Result is the full record of a run: every intermediate artifact, so a
-// disappointing verdict can be investigated without repeating the work.
+// Result is the full record of a run: every intermediate artifact produced by
+// the five stages, so any aspect can be investigated without repeating the work.
+// To decide whether a change is an improvement, pass the baseline and after
+// benchmark paths to verify.FromFiles.
 type Result struct {
 	SchemaVersion int                   `json:"schema_version"`
 	Measurement   measurement.Config    `json:"measurement"`
@@ -52,18 +53,15 @@ type Result struct {
 	Diagnosis     *schema.Diagnosis     `json:"diagnosis"`
 	Applied       *schema.ApplyResult   `json:"applied"`
 	After         *capture.Result       `json:"after"`
-	Verification  *schema.VerifyResult  `json:"verification"`
-	// Accepted is true only when verification says MELHOROU. It is the one
-	// field that answers "did this work".
-	Accepted bool          `json:"accepted"`
-	Duration time.Duration `json:"duration_ns"`
+	Duration      time.Duration         `json:"duration_ns"`
 }
 
-// Run executes capture, extract, analyze, apply, capture, verify.
+// Run executes capture, extract, analyze, apply, and re-capture.
 //
 // It always leaves the repository on the branch it started from. The suggestion
-// branch is kept whatever the verdict — a rejected suggestion is still the most
-// informative thing produced by the run, and deleting it would throw that away.
+// branch is kept in case it is useful for inspection. The caller must pass the
+// baseline and after benchmark paths from the result to verify.FromFiles to
+// decide whether the change is an improvement.
 func Run(ctx context.Context, c analyze.Client, opts Options) (*Result, error) {
 	start := time.Now()
 	res := &Result{SchemaVersion: schema.Version}
@@ -129,15 +127,9 @@ func Run(ctx context.Context, c analyze.Client, opts Options) (*Result, error) {
 		return res, err
 	}
 
-	step("comparing")
-	verification, err := verify.FromFiles(baseline.BenchPath, after.BenchPath, opts.Verify)
-	res.Verification = verification
-	if err != nil {
-		return res, err
-	}
-	res.Accepted = verification.Verdict == schema.VerdictImproved
 	res.Duration = time.Since(start)
-	step("verdict: %s — branch %s kept for inspection", verification.Verdict, applied.Branch)
+	step("branch %s kept; compare with: profadvisor verify --baseline %s --after %s",
+		applied.Branch, baseline.BenchPath, after.BenchPath)
 	return res, nil
 }
 
@@ -162,18 +154,10 @@ func resolve(opts *Options) (measurement.Config, error) {
 			"pipeline: run objective is %s but capture is configured for %s",
 			cfg.Unit, opts.Capture.Unit)
 	}
-	for _, stage := range []struct {
-		name string
-		cfg  measurement.Config
-	}{
-		{"extract", opts.Extract.Measurement},
-		{"verify", opts.Verify.Measurement},
-	} {
-		if (stage.cfg != measurement.Config{}) && stage.cfg != cfg {
-			return measurement.Config{}, fmt.Errorf(
-				"pipeline: run measures %s but %s is configured for %s",
-				cfg.Unit, stage.name, stage.cfg.Unit)
-		}
+	if (opts.Extract.Measurement != measurement.Config{}) && opts.Extract.Measurement != cfg {
+		return measurement.Config{}, fmt.Errorf(
+			"pipeline: run measures %s but extract is configured for %s",
+			cfg.Unit, opts.Extract.Measurement.Unit)
 	}
 	if opts.Capture.Pkg == "" {
 		return measurement.Config{}, fmt.Errorf("pipeline: --pkg is required")
@@ -188,7 +172,6 @@ func resolve(opts *Options) (measurement.Config, error) {
 	}
 	opts.Capture.Profile, opts.Capture.Unit = cfg.Profile, cfg.Unit
 	opts.Extract.Measurement = cfg
-	opts.Verify.Measurement = cfg
 	return cfg, nil
 }
 

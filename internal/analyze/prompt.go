@@ -10,11 +10,11 @@ import (
 	"github.com/joaolaureano/profadvisor/internal/schema"
 )
 
-// render accumulates a prompt from catalog entries, holding the first error
+// promptBuilder accumulates a prompt from catalog entries, holding the first error
 // instead of returning one at every call site. A render failure means the
 // catalog and this code disagree about a placeholder, which is a bug rather
 // than a runtime condition, so the sticky error is checked once at the end.
-type render struct {
+type promptBuilder struct {
 	cat *prompt.Catalog
 	b   strings.Builder
 	err error
@@ -22,7 +22,7 @@ type render struct {
 
 // put appends one catalog entry. vars must supply exactly the placeholders the
 // entry declares; the catalog rejects anything else.
-func (r *render) put(key string, vars map[string]string) {
+func (r *promptBuilder) put(key string, vars map[string]string) {
 	if r.err != nil {
 		return
 	}
@@ -36,13 +36,13 @@ func (r *render) put(key string, vars map[string]string) {
 
 // raw appends text that is layout rather than prose — column alignment and
 // fenced source, which belong next to the loop that produces them.
-func (r *render) raw(s string) {
+func (r *promptBuilder) raw(s string) {
 	if r.err == nil {
 		r.b.WriteString(s)
 	}
 }
 
-func (r *render) done() (string, error) {
+func (r *promptBuilder) done() (string, error) {
 	if r.err != nil {
 		return "", r.err
 	}
@@ -103,9 +103,9 @@ func systemPrompt(cat *prompt.Catalog, cfg measurement.Config) (string, error) {
 // sitting next to the statement reliably picks a better target than one handed
 // the same numbers in a table.
 func buildUserPrompt(cat *prompt.Catalog, r *schema.ExtractResult, module string) (string, error) {
-	out := &render{cat: cat}
+	out := &promptBuilder{cat: cat}
 	cfg := r.Profile.Measurement
-	cost := coster(cfg)
+	cost := measurement.Coster(cfg)
 
 	kind := "CPU"
 	if cfg.Profile == measurement.Memory {
@@ -115,13 +115,13 @@ func buildUserPrompt(cat *prompt.Catalog, r *schema.ExtractResult, module string
 	out.put("user.profile_line", map[string]string{"path": r.Profile.Path})
 	out.put("user.objective_line", map[string]string{"unit": cfg.Unit, "sample_type": cfg.SampleType})
 	if r.Profile.DurationNanos > 0 {
-		out.put("user.walltime_line", map[string]string{"walltime": nanos(r.Profile.DurationNanos)})
+		out.put("user.walltime_line", map[string]string{"walltime": measurement.Nanos(r.Profile.DurationNanos)})
 	}
 	out.put("user.total_line", map[string]string{"sample_unit": cfg.SampleUnit, "total": cost(r.Profile.Total)})
 	out.put("user.attributed_line", map[string]string{
 		"focus":      strings.Join(r.Profile.FocusPrefixes, ", "),
 		"attributed": cost(r.Profile.Analyzed),
-		"pct":        dec1(pct(r.Profile.Analyzed, r.Profile.Total)),
+		"pct":        measurement.Dec1(measurement.Pct(r.Profile.Analyzed, r.Profile.Total)),
 	})
 	if cfg.Attribution == "first_focus_frame" {
 		// Without this the model reads "self" as "allocated by its own
@@ -148,11 +148,11 @@ func buildUserPrompt(cat *prompt.Catalog, r *schema.ExtractResult, module string
 	out.put("user.hotspots_heading", noVars)
 	for i, h := range r.Hotspots {
 		out.put("user.hotspot_heading", map[string]string{
-			"n": strconv.Itoa(i + 1), "function": trimShape(h.Function),
+			"n": strconv.Itoa(i + 1), "function": measurement.TrimShape(h.Function),
 		})
 		out.put("user.hotspot_cost", map[string]string{
-			"flat": cost(h.Flat), "flat_pct": dec1(h.FlatPct),
-			"cum": cost(h.Cum), "cum_pct": dec1(h.CumPct),
+			"flat": cost(h.Flat), "flat_pct": measurement.Dec1(h.FlatPct),
+			"cum": cost(h.Cum), "cum_pct": measurement.Dec1(h.CumPct),
 		})
 		if h.Source == nil {
 			out.put("user.source_unavailable", map[string]string{
@@ -177,82 +177,3 @@ func buildUserPrompt(cat *prompt.Catalog, r *schema.ExtractResult, module string
 	out.put("user.task", noVars)
 	return out.done()
 }
-
-// trimShape strips the generic instantiation the Go compiler bakes into a
-// profile's function names. A method on a generic type comes back as
-//
-//	store.(*cache[go.shape.interface { Key() string }]).lookup
-//
-// which costs real tokens and tells the model nothing it cannot see in the
-// source. The bracketed part is dropped and the name reads as written.
-func trimShape(name string) string {
-	open := strings.Index(name, "[")
-	if open < 0 {
-		return name
-	}
-	depth, i := 0, open
-	for ; i < len(name); i++ {
-		switch name[i] {
-		case '[':
-			depth++
-		case ']':
-			depth--
-			if depth == 0 {
-				return name[:open] + name[i+1:]
-			}
-		}
-	}
-	return name
-}
-
-// coster returns the renderer for the profile's sample unit. A profile reader
-// expects nanoseconds as "1.20ms" and bytes as "4.0 MB"; printing either as a
-// bare integer wastes the model's attention on arithmetic.
-func coster(cfg measurement.Config) func(int64) string {
-	switch cfg.SampleUnit {
-	case "bytes":
-		return bytesCost
-	case "count":
-		return func(n int64) string { return fmt.Sprintf("%d allocs", n) }
-	default:
-		return nanos
-	}
-}
-
-func bytesCost(n int64) string {
-	switch {
-	case n >= 1<<30:
-		return fmt.Sprintf("%.2f GB", float64(n)/(1<<30))
-	case n >= 1<<20:
-		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
-	case n >= 1<<10:
-		return fmt.Sprintf("%.1f kB", float64(n)/(1<<10))
-	default:
-		return fmt.Sprintf("%d B", n)
-	}
-}
-
-// nanos renders a nanosecond count the way a profile reader expects to see it.
-func nanos(n int64) string {
-	switch {
-	case n >= 1e9:
-		return fmt.Sprintf("%.2fs", float64(n)/1e9)
-	case n >= 1e6:
-		return fmt.Sprintf("%.0fms", float64(n)/1e6)
-	case n >= 1e3:
-		return fmt.Sprintf("%.0fµs", float64(n)/1e3)
-	default:
-		return fmt.Sprintf("%dns", n)
-	}
-}
-
-func pct(part, whole int64) float64 {
-	if whole == 0 {
-		return 0
-	}
-	return float64(part) / float64(whole) * 100
-}
-
-// dec1 matches the %.1f the prompts were written against, so a percentage
-// substituted into a catalog entry reads the same as when it was a format verb.
-func dec1(f float64) string { return strconv.FormatFloat(f, 'f', 1, 64) }

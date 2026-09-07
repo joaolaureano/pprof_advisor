@@ -36,19 +36,18 @@ func TestVerifyCLIObjectiveAndExitContract(t *testing.T) {
 	for _, tc := range []struct {
 		name, after   string
 		args          []string
-		code          int
 		verdict, unit string
 	}{
-		{"memory_default", "100 ns/op 50 B/op 20 allocs/op", []string{"--profile", "memory"}, 0, schema.VerdictImproved, "B/op"},
-		{"cpu_protection", "200 ns/op 50 B/op 5 allocs/op", []string{"--unit", "B/op"}, 2, schema.VerdictRegressed, "B/op"},
-		{"allocation_count", "100 ns/op 200 B/op 5 allocs/op", []string{"--unit", "allocs/op"}, 0, schema.VerdictImproved, "allocs/op"},
-		{"cpu_default", "50 ns/op 200 B/op 20 allocs/op", nil, 0, schema.VerdictImproved, "ns/op"},
+		{"memory_default", "100 ns/op 50 B/op 20 allocs/op", []string{"--profile", "memory"}, schema.VerdictImproved, "B/op"},
+		{"cpu_protection", "200 ns/op 50 B/op 5 allocs/op", []string{"--unit", "B/op"}, schema.VerdictRegressed, "B/op"},
+		{"allocation_count", "100 ns/op 200 B/op 5 allocs/op", []string{"--unit", "allocs/op"}, schema.VerdictImproved, "allocs/op"},
+		{"cpu_default", "50 ns/op 200 B/op 20 allocs/op", nil, schema.VerdictImproved, "ns/op"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			after := writeInput(t, "after.txt", strings.Repeat("BenchmarkWork-8 1 "+tc.after+"\n", 10))
 			args := append([]string{"verify", "--baseline", baseline, "--after", after}, tc.args...)
 			code, out, diagnostics := invoke(args...)
-			if code != tc.code {
+			if code != 0 {
 				t.Fatalf("code=%d diagnostics=%s", code, diagnostics)
 			}
 			var res schema.VerifyResult
@@ -57,9 +56,6 @@ func TestVerifyCLIObjectiveAndExitContract(t *testing.T) {
 			}
 			if res.SchemaVersion != 3 || res.Verdict != tc.verdict || res.Measurement.Unit != tc.unit {
 				t.Fatalf("result=%+v", res)
-			}
-			if code == 2 && !strings.Contains(diagnostics, "regressed") {
-				t.Fatalf("missing regression diagnostic: %q", diagnostics)
 			}
 		})
 	}
@@ -140,5 +136,84 @@ func TestEscapeCLI(t *testing.T) {
 				t.Errorf("Found %q in Target: %s", phrase, finding.Target)
 			}
 		}
+	}
+}
+
+func TestFormatTextIsHumanReadable(t *testing.T) {
+	// Test extract with --format text
+	code, out, diagnostics := invoke("extract", filepath.Join("..", "testdata", "all.prof"), "--format", "text")
+	if code != 0 {
+		t.Fatalf("extract exit=%d diagnostics=%s", code, diagnostics)
+	}
+	// Should not parse as JSON
+	var res interface{}
+	if err := json.Unmarshal([]byte(out), &res); err == nil {
+		t.Fatal("extract --format text should not produce valid JSON")
+	}
+	// Should contain a text marker that indicates human-readable output
+	if !strings.Contains(out, "Profile Analysis") && !strings.Contains(out, "Hotspots") {
+		t.Fatalf("extract text output missing expected markers: %s", out)
+	}
+
+	// Test escape with --format text
+	corpusPath := filepath.Join("..", "testdata", "escape", "corpus")
+	code, out, diagnostics = invoke("escape", "--dir", corpusPath, "--format", "text")
+	if code != 0 {
+		t.Fatalf("escape exit=%d diagnostics=%s", code, diagnostics)
+	}
+	// Should not parse as JSON
+	if err := json.Unmarshal([]byte(out), &res); err == nil {
+		t.Fatal("escape --format text should not produce valid JSON")
+	}
+	// Should contain text markers
+	if !strings.Contains(out, "Escape Analysis") && !strings.Contains(out, "Findings") {
+		t.Fatalf("escape text output missing expected markers: %s", out)
+	}
+}
+
+func TestFormatJSONIsUnchanged(t *testing.T) {
+	// Run extract with no format flag (should default to json)
+	code1, out1, diag1 := invoke("extract", filepath.Join("..", "testdata", "all.prof"))
+	if code1 != 0 {
+		t.Fatalf("extract (no flag) exit=%d diagnostics=%s", code1, diag1)
+	}
+
+	// Run extract with explicit --format json
+	code2, out2, diag2 := invoke("extract", filepath.Join("..", "testdata", "all.prof"), "--format", "json")
+	if code2 != 0 {
+		t.Fatalf("extract (--format json) exit=%d diagnostics=%s", code2, diag2)
+	}
+
+	// The two outputs should be byte-identical
+	if out1 != out2 {
+		t.Fatalf("default and explicit --format json differ\ndefault:\n%s\n\nexplicit:\n%s", out1, out2)
+	}
+}
+
+func TestFormatIsValidatedBeforeAnyWork(t *testing.T) {
+	// Test with extract and invalid format
+	code, out, diagnostics := invoke("extract", filepath.Join("..", "testdata", "all.prof"), "--format", "yaml")
+	if code != 1 {
+		t.Fatalf("extract --format yaml should exit 1, got %d", code)
+	}
+	if out != "" {
+		t.Fatalf("extract --format yaml should produce empty stdout, got: %s", out)
+	}
+	if !strings.Contains(diagnostics, "json") || !strings.Contains(diagnostics, "text") {
+		t.Fatalf("error should name both json and text, got: %s", diagnostics)
+	}
+
+	// Test with capture and invalid format (capture would shell out to go test if validation
+	// didn't happen first, so this proves validation happens up front)
+	tmpdir := t.TempDir()
+	code, out, diagnostics = invoke("capture", "--pkg", "./...", "--dir", tmpdir, "--format", "yaml")
+	if code != 1 {
+		t.Fatalf("capture --format yaml should exit 1, got %d", code)
+	}
+	if out != "" {
+		t.Fatalf("capture --format yaml should produce empty stdout, got: %s", out)
+	}
+	if !strings.Contains(diagnostics, "json") || !strings.Contains(diagnostics, "text") {
+		t.Fatalf("error should name both json and text, got: %s", diagnostics)
 	}
 }

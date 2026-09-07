@@ -1,0 +1,142 @@
+Escape Analysis
+  Toolchain:      go1.26.1
+  Path:           /usr/local/go/bin/go
+  GOOS/GOARCH:    linux/amd64
+
+Analysis:
+  Dir:            /tmp/corpus
+  Patterns:       ./...
+  Parser:         go1.20+
+  Total lines:    86
+  Recognized:     20
+  Ignored:        66
+  Unrecognized:   0
+  Duration:       1.00s
+
+Summary:
+  Packages:       1
+  Files:          6
+  Findings:       20
+  By kind:
+    closure_capture                1
+    does_not_escape                8
+    escapes_to_heap                5
+    leaking_param                  1
+    leaking_param_content          1
+    leaking_param_result           2
+    moved_to_heap                  2
+
+Findings:
+
+append.go
+  4:18 leaking_param_result s
+    function: appendGrows
+    target: ~r0
+    evidence: ./append.go:4:18: leaking param: s to result ~r0 level=0
+    flow:
+      {temp} ← s:
+      append(s, 42) (call parameter at append.go:5:15)
+      ~r0 ← {temp}:
+      return append(s, 42) (return at append.go:5:2)
+  5:15 escapes_to_heap append
+    function: appendGrows
+    evidence: ./append.go:5:15: append escapes to heap
+    flow:
+      ~r0 ← &{storage for append(s, 42)}:
+      append(s, 42) (spill at append.go:5:15)
+      return append(s, 42) (return at append.go:5:2)
+
+closure.go
+  5:2 closure_capture n
+    function: closureByRef
+    evidence: ./closure.go:5:2: closureByRef capturing by ref: n (addr=false assign=true width=8)
+  5:2 moved_to_heap n
+    function: closureByRef
+    evidence: ./closure.go:5:2: moved to heap: n
+    flow:
+      {storage for func literal} ← &n:
+      n (captured by a closure at closure.go:7:3)
+      n (reference at closure.go:7:3)
+  6:9 escapes_to_heap func literal
+    function: closureByRef
+    evidence: ./closure.go:6:9: func literal escapes to heap
+    flow:
+      ~r0 ← &{storage for func literal}:
+      func literal (spill at closure.go:6:9)
+      return func literal (return at closure.go:6:2)
+
+heap.go
+  5:2 moved_to_heap x
+    function: allocHeap
+    evidence: ./heap.go:5:2: moved to heap: x
+    flow:
+      ~r0 ← &x:
+      &x (address-of at heap.go:6:9)
+      return &x (return at heap.go:6:2)
+  11:13 escapes_to_heap make([]int, n)
+    function: sliceHeap
+    evidence: ./heap.go:11:13: make([]int, n) escapes to heap
+    flow:
+      ~r0 ← &{storage for make([]int, n)}:
+      make([]int, n) (spill at heap.go:11:13)
+      return make([]int, n) (return at heap.go:11:2)
+
+iface.go
+  7:20 does_not_escape ... argument
+    evidence: ./iface.go:7:20: ... argument does not escape
+  7:27 escapes_to_heap x
+    function: ifaceEscapes
+    evidence: ./iface.go:7:27: x escapes to heap
+    flow:
+      {storage for ... argument} ← &{storage for x}:
+      x (spill at iface.go:7:27)
+      ... argument (slice-literal-element at iface.go:7:20)
+      {heap} ← {storage for ... argument}:
+      ... argument (spill at iface.go:7:20)
+      fmt.Sprintf("%v", ... argument...) (call parameter at iface.go:7:20)
+
+params.go
+  6:19 leaking_param_result p
+    function: leakToResult
+    target: ~r0
+    evidence: ./params.go:6:19: leaking param: p to result ~r0 level=0
+    flow:
+      ~r0 ← p:
+      return p (return at params.go:7:2)
+  11:17 leaking_param p
+    function: leakToHeap
+    evidence: ./params.go:11:17: leaking param: p
+    flow:
+      {heap} ← p:
+      globalPtr = p (assign at params.go:12:12)
+  16:15 does_not_escape p
+    evidence: ./params.go:16:15: p does not escape
+  23:18 does_not_escape p
+    evidence: ./params.go:23:18: p does not escape
+  24:22 escapes_to_heap append
+    function: leakContent
+    evidence: ./params.go:24:22: append escapes to heap
+    flow:
+      {heap} ← &{storage for append(globalSlice, *p...)}:
+      append(globalSlice, *p...) (spill at params.go:24:22)
+      globalSlice = append(globalSlice, *p...) (assign at params.go:24:14)
+  30:24 leaking_param_content p
+    function: leakContentDirect
+    evidence: ./params.go:30:24: leaking param content: p
+    flow:
+      {heap} ← **p:
+      *p (indirection at params.go:32:16)
+      (*p)[0] (dot of pointer at params.go:32:19)
+      globalInt = (*p)[0] (assign at params.go:32:13)
+  37:13 does_not_escape p
+    evidence: ./params.go:37:13: p does not escape
+  42:12 does_not_escape p
+    evidence: ./params.go:42:12: p does not escape
+  47:21 does_not_escape fn
+    evidence: ./params.go:47:21: fn does not escape
+  52:20 does_not_escape p
+    evidence: ./params.go:52:20: p does not escape
+
+stack.go
+  15:11 does_not_escape make([]int, 10)
+    evidence: ./stack.go:15:11: make([]int, 10) does not escape

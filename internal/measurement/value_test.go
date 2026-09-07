@@ -1,6 +1,8 @@
-package analyze
+package measurement
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestTrimShape(t *testing.T) {
 	cases := map[string]string{
@@ -11,8 +13,8 @@ func TestTrimShape(t *testing.T) {
 		"pkg.unbalanced[oops":   "pkg.unbalanced[oops",
 	}
 	for in, want := range cases {
-		if got := trimShape(in); got != want {
-			t.Errorf("trimShape(%q)\n got %q\nwant %q", in, got, want)
+		if got := TrimShape(in); got != want {
+			t.Errorf("TrimShape(%q)\n got %q\nwant %q", in, got, want)
 		}
 	}
 }

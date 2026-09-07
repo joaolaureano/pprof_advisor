@@ -1,0 +1,22 @@
+Diagnosis
+  Provider:       openai
+  Model:          gpt-4
+  Objective:      ns/op (cpu)
+  Target:         example.com/pkg.someFunction
+  Cause:          The function allocates frequently in a loop
+  Change:         Use a sync.Pool to reuse the allocated buffer
+  Confidence:     high
+  Risks:
+    - The pool may not be thread-safe in all contexts
+
+Diff:
+--- a/pkg/file.go
++++ b/pkg/file.go
+@@ -10,7 +10,7 @@ func someFunction(x int) {
+     for i := 0; i < x; i++ {
+-        buf := make([]byte, 1024)
++        buf := pool.Get().([]byte)
+         process(buf)
++        pool.Put(buf)
+     }
+ }

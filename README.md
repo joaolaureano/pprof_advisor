@@ -37,9 +37,17 @@ export PROFADVISOR_API_KEY=...
 ```
 
 Nothing about the target is assumed or configured anywhere: change `--dir` and
-you are working on a different project. The loop is capture → extract → analyze
-→ apply → capture → verify, and a suggestion is only a success when the second
-measurement says so; the model's confidence is not evidence.
+you are working on a different project. `run` does capture → extract → analyze
+→ apply → capture and hands you the two benchmark outputs; `verify` turns those
+into a verdict. A suggestion is only a success when that second measurement says
+so — the model's confidence is not evidence.
+
+Every command writes JSON to stdout. Add `--format text` to read the same
+document yourself instead:
+
+```
+./profadvisor extract cpu.prof --format text
+```
 
 See [AGENTS.md](AGENTS.md) for the full command reference and the I/O contract.
 That file is what both humans and agents should read first.
@@ -175,11 +183,12 @@ a patch that saves bytes by spending time is rejected rather than celebrated.
 | `internal/prompt/` | Every prompt the tool sends, as one validated JSON catalog. |
 | `internal/llm/` | Neutral model client; one adapter subpackage per provider. |
 | `internal/apply/` | Applies the diff on a branch. Refuses a dirty tree; rolls back. |
-| `internal/verify/` | benchfmt + benchmath. Returns MELHOROU / SEM DIFERENÇA / PIOROU. |
+| `internal/verify/` | benchfmt + benchmath. The only place a verdict is reached. |
+| `internal/render/` | Documents and values as readable text, for `--format text` and for prompts. |
 | `internal/escape/` | Parses the compiler's escape diagnostics. The only place their wording lives. |
 | `internal/toolchain/` | Finds the Go toolchain that will compile the target, and runs it. |
 | `internal/proc/` | Process-group handling for the packages that shell out to `go`. |
-| `internal/pipeline/` | Runs the five in order and decides what the result means. |
+| `internal/pipeline/` | Runs the five stages in order. Produces artifacts; judges nothing. |
 | `internal/schema/` | The JSON contract between subcommands. |
 | `internal/fixture/` | Loads the recorded profiles under `testdata/` for tests. |
 | `testdata/fixture/` | A small Go module whose benchmarks produce those profiles. |

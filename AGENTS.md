@@ -94,10 +94,17 @@ can change.
 
 Every subcommand follows the same rules, and tooling can rely on them:
 
-- **stdout** carries the result as indented JSON, and carries nothing else.
+- **stdout** carries the result, and carries nothing else. `--format` chooses
+  the rendering: `json` (the default, indented) or `text`. Agents should leave
+  it at `json`; `text` exists so a person can read the same document.
 - **stderr** carries every diagnostic, progress line, and error message.
-- **exit 0** means the JSON on stdout is complete. **Non-zero** means it is
-  absent or partial — do not parse stdout after a non-zero exit.
+- **exit 0** means the tool worked and the document on stdout is complete.
+  **exit 1** means it failed; the document is absent or partial — do not parse
+  stdout after a non-zero exit.
+
+There is no exit code 2. It used to mean "the tool worked and the answer was
+bad", which put a measured regression into the process contract; a verdict is
+now a field in a document and nothing else. See "Reporting and judging" below.
 
 Each document carries `schema_version`, currently **3**. A consumer that does
 not recognize the version should stop rather than guess at the shape.
@@ -108,6 +115,33 @@ not recognize the version should stop rather than guess at the shape.
 report is not in that chain, and its reason to change is the compiler's
 diagnostic vocabulary. Sharing one number would bump five documents every time
 the toolchain rewords a line.
+
+## Reporting and judging
+
+Two kinds of command, and it is worth knowing which you are holding:
+
+**Reporters** — `capture`, `extract`, `analyze`, `apply`, `escape`, `run`. They
+produce a document describing what they found or did. None of them decides
+whether anything is good. `escape` is the clearest case: a heap allocation is
+evidence, not a defect.
+
+**One judge** — `verify`. It is the only command that reaches a verdict, and it
+does so from two benchmark outputs, not from any other document this tool
+produces. A p-value needs N samples of a metric; a profile has none, and a
+diagnosis is a hypothesis.
+
+The verdict is not an opinion in the loose sense. The statistics are mechanical
+— `benchmath.AssumeNothing`, a non-parametric comparison — and the `p_value`,
+`delta_pct` and sample counts are all in the document, so you can ignore the
+roll-up and decide for yourself. What *is* a policy choice is exactly two
+things, both declared and both adjustable: the significance level (`--alpha`,
+default 0.05) and which metric plays which `role`, which follows from
+`--profile`/`--unit`.
+
+`run` therefore stops before judging. It captures, extracts, diagnoses,
+applies, and re-captures, then hands you the two `bench.txt` paths and the
+`verify` invocation that turns them into a verdict. Chaining it yourself is one
+line, and it keeps "what happened" separate from "was it worth it".
 
 Every document also carries a `measurement` object — profile, unit, pprof sample
 type, sample unit, and attribution rule. Cost fields (`total`, `analyzed`,
@@ -255,20 +289,40 @@ was four findings out of 683.
 
 ### `profadvisor run`
 
-Runs the five steps in order. Use the individual commands when you want to
-inspect or edit anything in between — in particular, reading the diff before
-applying it is usually worth the extra step.
+Runs capture → extract → analyze → apply → re-capture in order, and writes the
+full record: every intermediate artifact, so a disappointing result can be
+investigated without repeating the work. Use the individual commands when you
+want to inspect or edit anything in between — in particular, reading the diff
+before applying it is usually worth the extra step.
+
+**It does not verify.** The last progress line names the command that does:
+
+```
+profadvisor verify --baseline <baseline bench.txt> --after <after bench.txt>
+```
+
+Both paths are in the record, under `baseline.bench_path` and
+`after.bench_path`. Running that is what turns a run into an answer.
+
+The suggestion branch is kept whatever happens, and the repository is left on
+the branch you started from.
 
 ## What a result means
 
-The pipeline succeeds only when `verify` reports `MELHOROU`. Every other outcome
-is information, not failure:
+A `run` on its own means only that the steps completed. It says nothing about
+whether the change helped — that is `verify`'s answer, and you have to ask for
+it. Once you do:
 
+- `MELHOROU` — the objective improved significantly. This is the only outcome
+  that justifies keeping the change.
 - `SEM DIFERENÇA` — the change was neutral. Discard the branch; the hypothesis
   was wrong, and knowing that cost one cycle.
 - `PIOROU` — the change was harmful. Discard the branch. This happens and is not
   a malfunction. On a memory run, check which metric caused it: a `PIOROU` from
   the `ns/op` guard with the objective improving means the model bought memory
   with time, and is worth re-running with a narrower `--bench`.
+
+All three exit 0. The verdict is in the document, and a regression is a
+finding, not a failure of the tool.
 
 Do not report an optimization as done on the strength of the diagnosis alone.
