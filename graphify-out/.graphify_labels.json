@@ -1,6 +1,6 @@
 {
   "0": "FromReaders",
-  "1": "newClient",
+  "1": "modelFlags",
   "2": "profadvisor",
   "3": "Run",
   "4": "Run",
@@ -12,7 +12,18 @@
   "10": "buildUserPrompt",
   "11": "example.com/profadvisor/fixture",
   "12": "github.com/joaolaureano/profadvisor",
-  "13": "Config",
+  "13": "Run",
   "14": "testing.T",
-  "15": "os/exec.Cmd"
+  "15": "os/exec.Cmd",
+  "16": "Parse",
+  "17": "params.go",
+  "18": "stack.go",
+  "19": "heap.go",
+  "20": "append.go",
+  "21": "closure.go",
+  "22": "iface.go",
+  "23": "escape/README.md",
+  "24": "doc.go",
+  "25": "example.com/escapecorpus",
+  "26": "load"
 }
