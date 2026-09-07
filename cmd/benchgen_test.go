@@ -33,7 +33,7 @@ func TestBenchgenCLI(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &r); err != nil {
 		t.Fatal(err)
 	}
-	if r.SchemaVersion != 2 || !r.Generated || r.Validated || r.InstalledPath != "" {
+	if r.SchemaVersion != 3 || !r.Generated || r.Validated || r.InstalledPath != "" {
 		t.Fatalf("report=%+v", r)
 	}
 	code, out, diag = invoke(append(args, "--out", filepath.Join(dir, "text"), "--format", "text")...)

@@ -185,16 +185,78 @@ func resolveTarget(ctx context.Context, o Options) (Target, error) {
 	}
 	sig := fn.Type().(*types.Signature)
 	if sig.Recv() != nil || sig.TypeParams().Len() != 0 || sig.Variadic() || sig.Params().Len() == 0 {
-		return target, fmt.Errorf("function must be non-generic, non-variadic and accept one or more native Go fuzz type arguments")
+		return target, fmt.Errorf("function must be non-generic, non-variadic and accept one or more fuzzable arguments")
 	}
-	inputs := make([]string, sig.Params().Len())
+	inputs := make([]string, 0, sig.Params().Len())
+	argumentTypes := make([]string, sig.Params().Len())
+	argumentTemplates := make([]string, sig.Params().Len())
 	for i := 0; i < sig.Params().Len(); i++ {
-		inputs[i] = fuzzInputType(sig.Params().At(i).Type())
-		if inputs[i] == "" {
-			return target, fmt.Errorf("parameter %d must be one native Go fuzz type: string, []byte, bool, integer, rune, byte, float32, or float64", i+1)
+		parameterType := sig.Params().At(i).Type()
+		argumentTypes[i] = goTypeString(parameterType, pkg)
+		leaves, template, err := flattenFuzzArgument(parameterType, pkg)
+		if err != nil {
+			return target, fmt.Errorf("parameter %d: %w", i+1, err)
 		}
+		argumentTemplates[i] = shiftPlaceholders(template, len(leaves), len(inputs))
+		inputs = append(inputs, leaves...)
 	}
-	return Target{Dir: p.Dir, Package: p.ImportPath, Name: p.Name, Function: o.Function, InputTypes: inputs, GoVersion: version, FuzzName: fuzzName, BenchmarkName: benchmarkName}, nil
+	if len(inputs) == 0 {
+		return target, fmt.Errorf("function must include at least one native Go fuzz input; empty structs cannot be fuzzed")
+	}
+	return Target{Dir: p.Dir, Package: p.ImportPath, Name: p.Name, Function: o.Function, ArgumentTypes: argumentTypes, InputTypes: inputs, ArgumentTemplates: argumentTemplates, GoVersion: version, FuzzName: fuzzName, BenchmarkName: benchmarkName}, nil
+}
+
+// flattenFuzzArgument turns a function argument into the native values that
+// testing.F can accept. Structs are reconstructed with keyed literals in the
+// generated same-package test, so no reflection or serialization runs in a
+// benchmark loop. Only local structs are accepted: external struct names would
+// require imports and may expose inaccessible fields.
+func flattenFuzzArgument(typ types.Type, pkg *types.Package) ([]string, string, error) {
+	if input := fuzzInputType(typ); input != "" {
+		return []string{input}, "$0", nil
+	}
+	unaliased := types.Unalias(typ)
+	underlying, ok := unaliased.Underlying().(*types.Struct)
+	if !ok {
+		return nil, "", fmt.Errorf("must be a native Go fuzz type or a struct composed of native Go fuzz types")
+	}
+	if named, ok := unaliased.(*types.Named); ok && named.Obj().Pkg() != pkg {
+		return nil, "", fmt.Errorf("struct %s is declared outside the target package", named.Obj().Name())
+	}
+	inputs := make([]string, 0, underlying.NumFields())
+	fields := make([]string, 0, underlying.NumFields())
+	for i := 0; i < underlying.NumFields(); i++ {
+		field := underlying.Field(i)
+		if field.Name() == "_" {
+			return nil, "", fmt.Errorf("struct contains blank field %d, which cannot be reconstructed", i+1)
+		}
+		leaves, expression, err := flattenFuzzArgument(field.Type(), pkg)
+		if err != nil {
+			return nil, "", fmt.Errorf("struct field %s: %w", field.Name(), err)
+		}
+		fields = append(fields, field.Name()+": "+shiftPlaceholders(expression, len(leaves), len(inputs)))
+		inputs = append(inputs, leaves...)
+	}
+	return inputs, goTypeString(unaliased, pkg) + "{" + strings.Join(fields, ", ") + "}", nil
+}
+
+func shiftPlaceholders(expression string, count, offset int) string {
+	for i := count - 1; i >= 0; i-- {
+		expression = strings.ReplaceAll(expression, "$"+strconv.Itoa(i), "$"+strconv.Itoa(i+offset))
+	}
+	return expression
+}
+
+func goTypeString(typ types.Type, current *types.Package) string {
+	if named, ok := types.Unalias(typ).(*types.Named); ok {
+		return named.Obj().Name()
+	}
+	return types.TypeString(typ, func(p *types.Package) string {
+		if p == current {
+			return ""
+		}
+		return p.Name()
+	})
 }
 
 // fuzzInputType uses types.Identical deliberately: aliases such as rune and

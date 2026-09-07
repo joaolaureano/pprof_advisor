@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"go/parser"
 	"go/token"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -39,6 +41,20 @@ func TestGenerateRejectsWrongTupleArity(t *testing.T) {
 	_, err := generateCode(Target{Name: "sample", Function: "process", InputTypes: []string{"string", "bool"}}, []Seed{{Hash: "x", Literals: []string{`"one"`}}})
 	if err == nil {
 		t.Fatal("accepted short tuple")
+	}
+}
+
+func TestRenderCallArgumentsKeepsTwoDigitPlaceholdersDistinct(t *testing.T) {
+	arguments := make([]string, 11)
+	for i := range arguments {
+		arguments[i] = "input" + strconv.Itoa(i)
+	}
+	got, err := renderCallArguments([]string{"Input{First: $0, Eleventh: $10}"}, arguments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "Input{First: input0, Eleventh: input10}"; !reflect.DeepEqual(got, []string{want}) {
+		t.Fatalf("arguments = %q, want %q", got, want)
 	}
 }
 

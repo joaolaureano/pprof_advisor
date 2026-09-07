@@ -38,6 +38,13 @@ func TestResolveTarget(t *testing.T) {
  func runeArg(v rune) {}
 
  func tuple(s string, n int64, ok bool) {}
+ type Nested struct { Count int64; Ready bool }
+ type Input struct { Name string; Nested Nested }
+ type BadInput struct { Values []string }
+	 type Empty struct{}
+ func structured(in Input, suffix string) {}
+ func badStructured(in BadInput) {}
+	 func empty(in Empty) {}
  func pointer(p uintptr) {}
  func alias(a Alias) {}
  func named(n Named) {}
@@ -47,10 +54,10 @@ func TestResolveTarget(t *testing.T) {
  type T struct{}
  func (T) method(s string) {}
  `)
-	for _, name := range []string{"hidden", "bytes", "alias", "number", "flag", "ratio", "runeArg", "tuple", "pointer", "named", "generic", "variadic", "zero", "method", "missing"} {
+	for _, name := range []string{"hidden", "bytes", "alias", "number", "flag", "ratio", "runeArg", "tuple", "structured", "badStructured", "empty", "pointer", "named", "generic", "variadic", "zero", "method", "missing"} {
 		t.Run(name, func(t *testing.T) {
 			target, err := resolveTarget(context.Background(), Options{Dir: dir, Package: ".", Function: name})
-			wantOK := name == "hidden" || name == "bytes" || name == "alias" || name == "number" || name == "flag" || name == "ratio" || name == "runeArg" || name == "tuple"
+			wantOK := name == "hidden" || name == "bytes" || name == "alias" || name == "number" || name == "flag" || name == "ratio" || name == "runeArg" || name == "tuple" || name == "structured"
 			if (err == nil) != wantOK {
 				t.Fatalf("target %+v, error %v", target, err)
 			}
@@ -59,6 +66,17 @@ func TestResolveTarget(t *testing.T) {
 			}
 			if name == "tuple" && !reflect.DeepEqual(target.InputTypes, []string{"string", "int64", "bool"}) {
 				t.Fatalf("types=%q", target.InputTypes)
+			}
+			if name == "structured" {
+				if !reflect.DeepEqual(target.InputTypes, []string{"string", "int64", "bool", "string"}) {
+					t.Fatalf("flattened types=%q", target.InputTypes)
+				}
+				if !reflect.DeepEqual(target.ArgumentTypes, []string{"Input", "string"}) {
+					t.Fatalf("argument types=%q", target.ArgumentTypes)
+				}
+				if !reflect.DeepEqual(target.ArgumentTemplates, []string{"Input{Name: $0, Nested: Nested{Count: $1, Ready: $2}}", "$3"}) {
+					t.Fatalf("argument templates=%q", target.ArgumentTemplates)
+				}
 			}
 		})
 	}

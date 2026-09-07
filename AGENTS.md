@@ -157,10 +157,14 @@ assume nanoseconds.** Version 1 named these fields `*_nanos` and had no
 Generates offline same-package fuzz tests and benchmarks from a frozen Go fuzz
 v1 corpus. Accepts one non-generic, non-variadic package-level function with one
 or more native Go fuzz arguments: `string`, `[]byte`, `bool`, every built-in signed or
-unsigned integer type, `rune`, `byte`, `float32`, or `float64`,
-including unexported functions. Defined types are not supported. Corpus values
-use their exact explicit conversion, one line per function argument in signature
-order, for example `int64(-42)` or `bool(true)`. A corpus file is one complete
+unsigned integer type, `rune`, `byte`, `float32`, or `float64`, or local structs
+composed recursively from those types, including unexported functions. Struct
+fields are flattened recursively in declaration order and reconstructed with keyed
+literals. Defined scalar types, pointers, maps, interfaces, arbitrary slices,
+external structs, blank fields, and structs without any supported leaf field are
+not supported. Corpus values use their
+exact explicit conversion, one line per flattened native value in signature order,
+for example `int64(-42)` or `bool(true)`. A corpus file is one complete
 argument tuple. `uintptr` is not a native Go fuzz type and is refused.
 Requires a Go 1.24+ target toolchain. Returns are discarded; fuzz replay detects panics
 without inventing correctness properties or treating returned errors as failures.
@@ -176,7 +180,7 @@ build constraint prevents duplicate-symbol and orphan-package errors.
 any build constraint. That is the copy that runs when you execute the tests.
 Existing files and symbol conflicts are refused.
 
-This reporter has its own schema version **2** and no measurement object.
+This reporter has its own schema version **3** and no measurement object.
 `generated: true` with `validated: false` means generation succeeded, not that
 the seeds passed: generation never executes the target and needs no API key.
 

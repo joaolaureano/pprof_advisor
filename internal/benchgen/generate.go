@@ -23,7 +23,7 @@ func {{.Target.FuzzName}}({{.F}} *{{.Testing}}.F) {
 {{range .Seeds}} {{$.F}}.Add({{join .Literals ", "}})
 {{end}}
  {{.F}}.Fuzz(func({{.T}} *{{.Testing}}.T, {{join .Parameters ", "}}) {
-  {{$.Target.Function}}({{join $.Arguments ", "}})
+  {{$.Target.Function}}({{join $.CallArguments ", "}})
  })
 }
 
@@ -33,7 +33,7 @@ func {{.Target.BenchmarkName}}({{.B}} *{{.Testing}}.B) {
 {{range $i, $literal := .Literals}}  {{index $.Arguments $i}} := {{$literal}}
 {{end}}  {{$.B}}.ReportAllocs()
   for {{$.B}}.Loop() {
-   {{$.Target.Function}}({{join $.Arguments ", "}})
+   {{$.Target.Function}}({{join $.CallArguments ", "}})
   }
  })
 {{end}}
@@ -61,17 +61,21 @@ func generateCode(target Target, seeds []Seed) ([]byte, error) {
 		arguments[i] = ident("profadvisorInput" + strconv.Itoa(i+1))
 		parameters[i] = arguments[i] + " " + inputType
 	}
+	callArguments, err := renderCallArguments(target.ArgumentTemplates, arguments)
+	if err != nil {
+		return nil, err
+	}
 	type entry struct {
 		Name     string
 		Literals []string
 	}
 	data := struct {
-		Target                 Target
-		Testing, Math, F, T, B string
-		Parameters, Arguments  []string
-		Seeds                  []entry
-		NeedsMath              bool
-	}{Target: target, Testing: ident("profadvisorTesting"), Math: ident("profadvisorMath"), F: ident("profadvisorF"), T: ident("profadvisorT"), B: ident("profadvisorB"), Parameters: parameters, Arguments: arguments}
+		Target                               Target
+		Testing, Math, F, T, B               string
+		Parameters, Arguments, CallArguments []string
+		Seeds                                []entry
+		NeedsMath                            bool
+	}{Target: target, Testing: ident("profadvisorTesting"), Math: ident("profadvisorMath"), F: ident("profadvisorF"), T: ident("profadvisorT"), B: ident("profadvisorB"), Parameters: parameters, Arguments: arguments, CallArguments: callArguments}
 	ordered := append([]Seed(nil), seeds...)
 	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Hash < ordered[j].Hash })
 	for _, seed := range ordered {
@@ -100,6 +104,26 @@ func generateCode(target Target, seeds []Seed) ([]byte, error) {
 		return nil, fmt.Errorf("format generated harness: %w", err)
 	}
 	return code, nil
+}
+
+func renderCallArguments(templates, arguments []string) ([]string, error) {
+	if len(templates) == 0 {
+		return append([]string(nil), arguments...), nil
+	}
+	result := make([]string, len(templates))
+	for i, expression := range templates {
+		// Replace longest placeholders first: replacing $1 before $10 would
+		// corrupt a harness with eleven or more flattened struct fields.
+		for index := len(arguments) - 1; index >= 0; index-- {
+			argument := arguments[index]
+			expression = strings.ReplaceAll(expression, "$"+strconv.Itoa(index), argument)
+		}
+		if strings.Contains(expression, "$") {
+			return nil, fmt.Errorf("invalid generated argument template %q", templates[i])
+		}
+		result[i] = expression
+	}
+	return result, nil
 }
 
 func supportedInputType(inputType string) bool {

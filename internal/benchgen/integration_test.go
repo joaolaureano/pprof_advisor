@@ -59,6 +59,7 @@ func TestIntegrationGeneratedHarness(t *testing.T) {
 		{"float", "func process(v float64) float64 { return v / 2 }", []string{`float64(-1.5)`, `float64(4.25)`}},
 		{"bool", "func process(v bool) bool { return !v }", []string{`bool(true)`, `bool(false)`}},
 		{"tuple", "func process(s string, n int64, ok bool) int { if ok { return len(s)+int(n) }; return len(s)-int(n) }", []string{"string(\"hello\")\nint64(-3)\nbool(true)", "string(\"bye\")\nint64(7)\nbool(false)"}},
+		{"struct", "type limits struct { Count int64; Ready bool }\ntype request struct { Name string; Limits limits; Data []byte }\nfunc process(r request, suffix string) int { if r.Limits.Ready { return len(r.Name) + int(r.Limits.Count) + len(r.Data) + len(suffix) }; return 0 }", []string{"string(\"hello\")\nint64(3)\nbool(true)\n[]byte(\"data\")\nstring(\"!\")", "string(\"bye\")\nint64(7)\nbool(false)\n[]byte(\"x\")\nstring(\"?\")"}},
 		{"byte_rune", "func process(b byte, r rune) int32 { return int32(b) + r }", []string{"byte('K')\nrune('œ')", "uint8(255)\nint32(-1)"}},
 		{"float_special", "func process(v float64, n int) float64 { return v + float64(n) }", []string{"float64(NaN)\nint(1)", "math.Float64frombits(0x7ff8000000000001)\nint(-2)"}},
 	} {

@@ -12,7 +12,7 @@ func newBenchgenCmd() *cobra.Command {
 		Short: "Generate offline fuzz tests and benchmarks from a frozen Go corpus",
 		Long: "Generate a same-package fuzz test and benchmark without a model or API key. " +
 			"The function must be deterministic, have no external state, and neither modify nor retain its arguments. " +
-			"Only non-generic, non-variadic functions taking one or more native Go fuzz types are supported. " +
+			"Only non-generic, non-variadic functions whose arguments are native Go fuzz types or compatible local structs are supported. " +
 			"Returns are discarded; fuzzing detects panics and does not infer correctness properties. " +
 			"Requires Go 1.24+ in the target. Generation does not execute the target: replay seeds before measuring. " +
 			"Artifacts go to --out; --write also installs the test file in the target package. Existing files are refused.",

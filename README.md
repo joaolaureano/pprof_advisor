@@ -59,7 +59,7 @@ That file is what both humans and agents should read first.
 no model, API key, or benchmark execution is involved in generation.
 
 Each corpus file contains one value per parameter, in the function's parameter
-order. A function with one parameter therefore has one corpus value:
+order. A function with one primitive parameter therefore has one corpus value:
 
 ```text
 go test fuzz v1
@@ -68,8 +68,9 @@ string("example")
 
 For a `[]byte` parameter, use `[]byte("example\\x00\\xff")` instead of
 `string("example")`. Scalar parameters use an explicit conversion too, such as
-`int64(-42)`, `bool(true)`, or `float64(1.5)`. A function taking `string`,
-`int64`, and `bool` has three lines after the header. Pass the directory
+`int64(-42)`, `bool(true)`, or `float64(1.5)`. Struct arguments contribute one
+line for each supported leaf field in declaration order, recursively. A function
+taking `string`, `int64`, and `bool` has three lines after the header. Pass the directory
 containing these files explicitly. The native special-float forms `NaN`, `+Inf`,
 `-Inf`, and `math.Float32frombits`/`math.Float64frombits` are also accepted:
 
@@ -79,11 +80,14 @@ containing these files explicitly. The native special-float forms `NaN`, `+Inf`,
 ```
 
 One execution handles one package-level function, including unexported functions.
-It must be non-generic, non-variadic, and accept one or more native Go fuzz types:
+It must be non-generic and non-variadic. Arguments may be native Go fuzz types:
 `string`, `[]byte`, `bool`, `int`, `int8`, `int16`, `int32` (including `rune`),
 `int64`, `uint`, `uint8` (including `byte`), `uint16`, `uint32`, `uint64`,
-`float32`, or `float64`. `uintptr` is not accepted by Go fuzzing. Defined types
-are not yet supported.
+`float32`, or `float64`; or local structs composed recursively of those types.
+Struct fields are flattened into native fuzz inputs and rebuilt with keyed
+composite literals before each target call. `uintptr`, pointers, maps, interfaces,
+arbitrary slices, external structs, blank fields, empty-only structs, and defined
+scalar types are not accepted.
 Return values, including errors, are discarded. Methods and custom setup are
 unsupported, as are packages using cgo. The target must use a Go 1.24+ toolchain
 for `b.Loop()`.
@@ -107,7 +111,9 @@ constraint prevents duplicate-symbol and orphan-package errors.
 any build constraint. That is the copy that runs when you execute
 `go test ./internal/parser`. Existing files and conflicting symbols are refused.
 
-The JSON report and manifest use their own `schema_version: 2`; the report says
+The JSON report and manifest use their own `schema_version: 3`; `argument_types`
+records the target signature and `input_types` records the flattened fuzz values.
+The report says
 `generated: true` and `validated: false` because the target has not been executed.
 Use `--format text` for a readable report. Diagnostics use stderr and exits are
 0 for success or 1 for failure, as with the other commands.

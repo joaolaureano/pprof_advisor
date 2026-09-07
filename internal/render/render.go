@@ -86,7 +86,11 @@ func Text(v any) (string, error) {
 
 func textBenchgen(r *benchgen.Result) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Benchmark generation\n  Schema version: %d\n  Target: %s.%s (%s)\n  Seeds: %d\n  Corpus SHA256: %s\n  Code: %s\n  Manifest: %s\n", r.SchemaVersion, r.Manifest.Target.Package, r.Manifest.Target.Function, strings.Join(r.Manifest.Target.InputTypes, ", "), len(r.Manifest.Seeds), r.Manifest.CorpusHash, r.CodePath, r.ManifestPath)
+	argumentTypes := r.Manifest.Target.ArgumentTypes
+	if len(argumentTypes) == 0 {
+		argumentTypes = r.Manifest.Target.InputTypes
+	}
+	fmt.Fprintf(&b, "Benchmark generation\n  Schema version: %d\n  Target: %s.%s (%s)\n  Fuzz inputs: %s\n  Seeds: %d\n  Corpus SHA256: %s\n  Code: %s\n  Manifest: %s\n", r.SchemaVersion, r.Manifest.Target.Package, r.Manifest.Target.Function, strings.Join(argumentTypes, ", "), strings.Join(r.Manifest.Target.InputTypes, ", "), len(r.Manifest.Seeds), r.Manifest.CorpusHash, r.CodePath, r.ManifestPath)
 	if r.InstalledPath != "" {
 		fmt.Fprintf(&b, "  Installed: %s\n", r.InstalledPath)
 	}

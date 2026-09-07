@@ -6,8 +6,8 @@ import (
 	"fmt"
 )
 
-const SchemaVersion = 2
-const GeneratorVersion = "2"
+const SchemaVersion = 3
+const GeneratorVersion = "3"
 
 type Options struct {
 	Dir      string
@@ -19,14 +19,20 @@ type Options struct {
 }
 
 type Target struct {
-	Dir           string   `json:"dir"`
-	Package       string   `json:"package"`
-	Name          string   `json:"name"`
-	Function      string   `json:"function"`
+	Dir      string `json:"dir"`
+	Package  string `json:"package"`
+	Name     string `json:"name"`
+	Function string `json:"function"`
+	// ArgumentTypes describes the function signature. InputTypes describes the
+	// flattened native fuzz values used to reconstruct those arguments.
+	ArgumentTypes []string `json:"argument_types"`
 	InputTypes    []string `json:"input_types"`
-	GoVersion     string   `json:"go_version"`
-	FuzzName      string   `json:"fuzz_name"`
-	BenchmarkName string   `json:"benchmark_name"`
+	// ArgumentTemplates are generated Go expressions with $N placeholders for
+	// InputTypes. They are implementation detail, not part of the artifact.
+	ArgumentTemplates []string `json:"-"`
+	GoVersion         string   `json:"go_version"`
+	FuzzName          string   `json:"fuzz_name"`
+	BenchmarkName     string   `json:"benchmark_name"`
 }
 
 type Seed struct {
