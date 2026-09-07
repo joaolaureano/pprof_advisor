@@ -65,6 +65,9 @@ func FromReaders(baseline io.Reader, baselineName string, after io.Reader, after
 	if alpha == 0 {
 		alpha = 0.05
 	}
+	if alpha <= 0 || alpha >= 1 {
+		return nil, fmt.Errorf("alpha must be 0 for the default or between 0 and 1, got %g", opts.Alpha)
+	}
 	metrics := cfg.Metrics()
 	units := make([]string, 0, len(metrics))
 	for _, m := range metrics {
@@ -101,22 +104,25 @@ func FromReaders(baseline io.Reader, baselineName string, after io.Reader, after
 	}
 	sort.Strings(names)
 
-	objectiveVerdict, guardRegressed := "", false
+	objectiveVerdict, guardRegressed, coverageMissing := "", false, false
 	for _, name := range names {
 		oldByUnit, oldOK := baselineValues[name]
 		newByUnit, newOK := afterValues[name]
 		if !oldOK {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("%s: missing from baseline %q", name, baselineName))
+			coverageMissing = true
 			continue
 		}
 		if !newOK {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("%s: missing from after %q", name, afterName))
+			coverageMissing = true
 			continue
 		}
 		for _, metric := range metrics {
 			oldValues, newValues := oldByUnit[metric.Unit], newByUnit[metric.Unit]
 			if len(oldValues) == 0 || len(newValues) == 0 {
 				if metric.Role != measurement.Informational {
+					coverageMissing = true
 					result.Warnings = append(result.Warnings, fmt.Sprintf(
 						"%s: no %s samples; %s metric could not be checked (is -benchmem on?)",
 						name, metric.Unit, metric.Role))
@@ -148,7 +154,7 @@ func FromReaders(baseline io.Reader, baselineName string, after io.Reader, after
 	switch {
 	case objectiveVerdict == schema.VerdictRegressed || guardRegressed:
 		result.Verdict = schema.VerdictRegressed
-	case objectiveVerdict == schema.VerdictImproved:
+	case objectiveVerdict == schema.VerdictImproved && !coverageMissing:
 		result.Verdict = schema.VerdictImproved
 	}
 	return result, nil

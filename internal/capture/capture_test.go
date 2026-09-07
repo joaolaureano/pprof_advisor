@@ -3,6 +3,7 @@ package capture
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,4 +45,35 @@ func TestRunAgainstFixtureModule(t *testing.T) {
 	b, _ := os.ReadFile(res.BenchPath)
 	t.Logf("cmd: %v", res.Command)
 	t.Logf("bench output:\n%s", b)
+}
+
+func TestRunReportsNoMatchingBenchmarks(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs a benchmark")
+	}
+	target, err := fixture.Path("fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := Run(context.Background(), Options{
+		Pkg:       "./matcher/",
+		Bench:     "^NoSuchBenchmark$",
+		Dir:       target,
+		Count:     1,
+		Benchtime: "1x",
+		OutDir:    t.TempDir(),
+		Timeout:   3 * time.Minute,
+	})
+	if err == nil {
+		t.Fatal("Run succeeded with no matching benchmarks")
+	}
+	if !strings.Contains(err.Error(), "no benchmarks matched") {
+		t.Fatalf("error = %v", err)
+	}
+	if res == nil {
+		t.Fatal("Run returned nil result")
+	}
+	if _, statErr := os.Stat(res.BenchPath); statErr != nil {
+		t.Fatalf("bench output was not preserved: %v", statErr)
+	}
 }

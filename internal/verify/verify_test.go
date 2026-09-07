@@ -2,6 +2,7 @@ package verify
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -108,6 +109,66 @@ func TestMissingBenchmarkWarns(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(result.Warnings, "\n"), "Missing-8") {
 		t.Errorf("Warnings = %#v, want a warning naming Missing-8", result.Warnings)
+	}
+}
+
+func TestMissingBenchmarkBlocksImprovedVerdict(t *testing.T) {
+	var baseline, after strings.Builder
+	for i := 0; i < 8; i++ {
+		baseline.WriteString("BenchmarkPresent-8 1 100 ns/op\n")
+		baseline.WriteString("BenchmarkMissing-8 1 100 ns/op\n")
+		after.WriteString("BenchmarkPresent-8 1 50 ns/op\n")
+	}
+	result, err := FromReaders(strings.NewReader(baseline.String()), "baseline", strings.NewReader(after.String()), "after", Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Verdict != schema.VerdictNoChange {
+		t.Fatalf("Verdict = %q, want %q", result.Verdict, schema.VerdictNoChange)
+	}
+	if !strings.Contains(strings.Join(result.Warnings, "\n"), "Missing-8") {
+		t.Errorf("Warnings = %#v, want a warning naming Missing-8", result.Warnings)
+	}
+}
+
+func TestMissingGuardMetricBlocksImprovedVerdict(t *testing.T) {
+	cfg, err := measurement.Resolve(measurement.Memory, "B/op")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var baseline, after strings.Builder
+	for i := 0; i < 8; i++ {
+		baseline.WriteString("BenchmarkBytes-8 1 100 ns/op 100 B/op 1 allocs/op\n")
+		baseline.WriteString("BenchmarkNoGuard-8 1 100 B/op 1 allocs/op\n")
+		after.WriteString("BenchmarkBytes-8 1 100 ns/op 50 B/op 1 allocs/op\n")
+		after.WriteString("BenchmarkNoGuard-8 1 100 B/op 1 allocs/op\n")
+	}
+	result, err := FromReaders(strings.NewReader(baseline.String()), "baseline", strings.NewReader(after.String()), "after", Options{Measurement: cfg})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Verdict != schema.VerdictNoChange {
+		t.Fatalf("Verdict = %q, want %q", result.Verdict, schema.VerdictNoChange)
+	}
+	if !strings.Contains(strings.Join(result.Warnings, "\n"), "NoGuard-8: no ns/op samples") {
+		t.Errorf("Warnings = %#v, want missing guard metric warning", result.Warnings)
+	}
+}
+
+func TestInvalidAlphaIsError(t *testing.T) {
+	for _, alpha := range []float64{-0.1, 1, 2} {
+		t.Run(fmt.Sprintf("%g", alpha), func(t *testing.T) {
+			_, err := FromReaders(
+				strings.NewReader("BenchmarkOne-8 1 1 ns/op\n"),
+				"baseline",
+				strings.NewReader("BenchmarkOne-8 1 1 ns/op\n"),
+				"after",
+				Options{Alpha: alpha},
+			)
+			if err == nil || !strings.Contains(err.Error(), "alpha") {
+				t.Fatalf("error = %v, want alpha validation error", err)
+			}
+		})
 	}
 }
 

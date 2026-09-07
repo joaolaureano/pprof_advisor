@@ -91,5 +91,8 @@ func Run(ctx context.Context, opts Options) (*Result, error) {
 	if err := reader.Err(); err != nil {
 		return res, fmt.Errorf("benchmark: parsing benchmark output: %w\n%s", err, output.String())
 	}
+	if res.Benchmarks == 0 {
+		return res, fmt.Errorf("benchmark: no benchmarks matched %q\n%s", bench, output.String())
+	}
 	return res, nil
 }
