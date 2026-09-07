@@ -78,9 +78,9 @@
     "semantic_hash": ""
   },
   "internal/schema/schema.go": {
-    "mtime": 1788823408.3768766,
-    "seen": 1788823667.028679,
-    "ast_hash": "d00e79ece981004ac800315da5813d8a",
+    "mtime": 1788823730.8557649,
+    "seen": 1788823823.390198,
+    "ast_hash": "076693b57b66d0276c0786c87ac426d8",
     "semantic_hash": ""
   },
   "internal/verify/verify.go": {
@@ -120,9 +120,9 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1788823604.4422789,
-    "seen": 1788823667.028695,
-    "ast_hash": "6c3dc9dec4b2f8de1e6d8927ffe6f102",
+    "mtime": 1788823791.2422338,
+    "seen": 1788823823.390213,
+    "ast_hash": "5c746376058c66822a615785fb5865c3",
     "semantic_hash": ""
   },
   "README.md": {
@@ -162,9 +162,9 @@
     "semantic_hash": ""
   },
   "cmd/commands_test.go": {
-    "mtime": 1788759726.191221,
-    "seen": 1788808507.233081,
-    "ast_hash": "76f84e6cfe1ca1821da43a71595e586e",
+    "mtime": 1788823761.5142944,
+    "seen": 1788823823.390153,
+    "ast_hash": "0d190de01f633f457d8227b310467560",
     "semantic_hash": ""
   },
   "cmd/measurement.go": {

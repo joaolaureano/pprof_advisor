@@ -114,13 +114,13 @@
       "source_location": "L97"
     },
     {
-      "id": "cmd_commands_test_testextractcliemitsv3cpu",
-      "label": "TestExtractCLIEmitsV3CPU()",
+      "id": "cmd_commands_test_testextractclistampstheschemaversion",
+      "label": "TestExtractCLIStampsTheSchemaVersion()",
       "_origin": "ast",
       "community": 0,
       "community_name": "testing.T",
       "file_type": "code",
-      "norm_label": "testextractcliemitsv3cpu()",
+      "norm_label": "testextractclistampstheschemaversion()",
       "source_file": "cmd/commands_test.go",
       "source_location": "L78"
     },
@@ -2084,7 +2084,7 @@
       "file_type": "code",
       "norm_label": "escapefinding",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L346"
+      "source_location": "L352"
     },
     {
       "id": "internal_schema_schema_go_schema_escapeflowstep",
@@ -2095,7 +2095,7 @@
       "file_type": "code",
       "norm_label": "escapeflowstep",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L385"
+      "source_location": "L391"
     },
     {
       "id": "schema_escapekind",
@@ -2106,7 +2106,7 @@
       "file_type": "code",
       "norm_label": "escapekind",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L240"
+      "source_location": "L246"
     },
     {
       "id": "testdata_escape_corpus_params",
@@ -2341,7 +2341,7 @@
       "node_kind": "heading",
       "norm_label": "commands",
       "source_file": "AGENTS.md",
-      "source_location": "L209"
+      "source_location": "L216"
     },
     {
       "id": "agents_i_o_contract",
@@ -2377,7 +2377,7 @@
       "node_kind": "heading",
       "norm_label": "`profadvisor apply <patch.diff>`",
       "source_file": "AGENTS.md",
-      "source_location": "L421"
+      "source_location": "L431"
     },
     {
       "id": "agents_profadvisor_benchgen_dir_repo_pkg_package_func_name_corpus_directory_out_directory_write_impl_interface_type",
@@ -2389,7 +2389,7 @@
       "node_kind": "heading",
       "norm_label": "`profadvisor benchgen --dir <repo> --pkg <package> --func <name> --corpus <directory> --out <directory> [--write] [--impl interface=type ...]`",
       "source_file": "AGENTS.md",
-      "source_location": "L211"
+      "source_location": "L218"
     },
     {
       "id": "agents_profadvisor_capture_pkg_pattern_dir_repo_profile_cpu_memory_block_mutex_bench_regexp_count_n_rate_n",
@@ -2401,7 +2401,7 @@
       "node_kind": "heading",
       "norm_label": "`profadvisor capture --pkg <pattern> [--dir <repo>] [--profile cpu|memory|block|mutex] [--bench <regexp>] [--count n] [--rate n]`",
       "source_file": "AGENTS.md",
-      "source_location": "L318"
+      "source_location": "L328"
     },
     {
       "id": "agents_profadvisor_escape_dir_repo_pkg_pattern_timeout_d",
@@ -2413,7 +2413,7 @@
       "node_kind": "heading",
       "norm_label": "`profadvisor escape [--dir <repo>] [--pkg <pattern>] [--timeout <d>]`",
       "source_file": "AGENTS.md",
-      "source_location": "L459"
+      "source_location": "L469"
     },
     {
       "id": "agents_profadvisor_extract_profile_profile_cpu_memory_block_mutex",
@@ -2425,7 +2425,7 @@
       "node_kind": "heading",
       "norm_label": "`profadvisor extract <profile> [--profile cpu|memory|block|mutex]`",
       "source_file": "AGENTS.md",
-      "source_location": "L354"
+      "source_location": "L364"
     },
     {
       "id": "agents_profadvisor_prompt_extract_json_prompts_file_module_path",
@@ -2437,7 +2437,7 @@
       "node_kind": "heading",
       "norm_label": "`profadvisor prompt <extract.json> [--prompts <file>] [--module <path>]`",
       "source_file": "AGENTS.md",
-      "source_location": "L393"
+      "source_location": "L403"
     },
     {
       "id": "agents_profadvisor_verify_baseline_bench_txt_after_bench_txt_unit_unit",
@@ -2449,7 +2449,7 @@
       "node_kind": "heading",
       "norm_label": "`profadvisor verify --baseline <bench.txt> --after <bench.txt> [--unit <unit>]`",
       "source_file": "AGENTS.md",
-      "source_location": "L438"
+      "source_location": "L448"
     },
     {
       "id": "agents_reporting_and_judging",
@@ -2461,7 +2461,7 @@
       "node_kind": "heading",
       "norm_label": "reporting and judging",
       "source_file": "AGENTS.md",
-      "source_location": "L173"
+      "source_location": "L179"
     },
     {
       "id": "agents_requirements",
@@ -2485,7 +2485,7 @@
       "node_kind": "heading",
       "norm_label": "what a result means",
       "source_file": "AGENTS.md",
-      "source_location": "L545"
+      "source_location": "L555"
     },
     {
       "id": "agents_what_it_is_pointed_at",
@@ -3488,7 +3488,7 @@
       "file_type": "code",
       "norm_label": "applyresult",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L151"
+      "source_location": "L157"
     },
     {
       "id": "internal_schema_schema_go_schema_escapereport",
@@ -3499,7 +3499,7 @@
       "file_type": "code",
       "norm_label": "escapereport",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L279"
+      "source_location": "L285"
     },
     {
       "id": "internal_schema_schema_go_schema_excludedcost",
@@ -3510,7 +3510,7 @@
       "file_type": "code",
       "norm_label": "excludedcost",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L77"
+      "source_location": "L83"
     },
     {
       "id": "internal_schema_schema_go_schema_extractresult",
@@ -3521,7 +3521,7 @@
       "file_type": "code",
       "norm_label": "extractresult",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L29"
+      "source_location": "L35"
     },
     {
       "id": "internal_schema_schema_go_schema_promptresult",
@@ -3532,7 +3532,7 @@
       "file_type": "code",
       "norm_label": "promptresult",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L136"
+      "source_location": "L142"
     },
     {
       "id": "internal_schema_schema_go_schema_rawdiagnostic",
@@ -3543,7 +3543,7 @@
       "file_type": "code",
       "norm_label": "rawdiagnostic",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L395"
+      "source_location": "L401"
     },
     {
       "id": "internal_schema_schema_go_schema_sourceexcerpt",
@@ -3554,7 +3554,7 @@
       "file_type": "code",
       "norm_label": "sourceexcerpt",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L110"
+      "source_location": "L116"
     },
     {
       "id": "prompt_catalog_build",
@@ -3631,7 +3631,7 @@
       "file_type": "code",
       "norm_label": "escapeanalysis",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L315"
+      "source_location": "L321"
     },
     {
       "id": "schema_escapesummary",
@@ -3642,7 +3642,7 @@
       "file_type": "code",
       "norm_label": "escapesummary",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L337"
+      "source_location": "L343"
     },
     {
       "id": "schema_hotspot",
@@ -3653,7 +3653,7 @@
       "file_type": "code",
       "norm_label": "hotspot",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L95"
+      "source_location": "L101"
     },
     {
       "id": "schema_profilemeta",
@@ -3664,7 +3664,7 @@
       "file_type": "code",
       "norm_label": "profilemeta",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L48"
+      "source_location": "L54"
     },
     {
       "id": "schema_toolchain",
@@ -3675,7 +3675,7 @@
       "file_type": "code",
       "norm_label": "toolchain",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L300"
+      "source_location": "L306"
     },
     {
       "id": "go_type_go_ast_callexpr",
@@ -3972,7 +3972,7 @@
       "file_type": "code",
       "norm_label": "benchcomparison",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L192"
+      "source_location": "L198"
     },
     {
       "id": "internal_schema_schema_go_schema_verifyresult",
@@ -3983,7 +3983,7 @@
       "file_type": "code",
       "norm_label": "verifyresult",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L176"
+      "source_location": "L182"
     },
     {
       "id": "internal_verify_verify",
@@ -5611,7 +5611,7 @@
       "weight": 1.0
     },
     {
-      "source": "cmd_commands_test_testextractcliemitsv3cpu",
+      "source": "cmd_commands_test_testextractclistampstheschemaversion",
       "target": "cmd_commands_test_invoke",
       "relation": "calls",
       "_origin": "ast",
@@ -8787,7 +8787,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L347",
+      "source_location": "L353",
       "weight": 1.0
     },
     {
@@ -8799,7 +8799,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L370",
+      "source_location": "L376",
       "weight": 1.0
     },
     {
@@ -8811,7 +8811,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L281",
+      "source_location": "L287",
       "weight": 1.0
     },
     {
@@ -8823,7 +8823,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L282",
+      "source_location": "L288",
       "weight": 1.0
     },
     {
@@ -8835,7 +8835,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L283",
+      "source_location": "L289",
       "weight": 1.0
     },
     {
@@ -8847,7 +8847,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L284",
+      "source_location": "L290",
       "weight": 1.0
     },
     {
@@ -8859,7 +8859,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L290",
+      "source_location": "L296",
       "weight": 1.0
     },
     {
@@ -8871,7 +8871,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L31",
+      "source_location": "L37",
       "weight": 1.0
     },
     {
@@ -8883,7 +8883,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L32",
+      "source_location": "L38",
       "weight": 1.0
     },
     {
@@ -8895,7 +8895,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L180",
+      "source_location": "L186",
       "weight": 1.0
     },
     {
@@ -8907,7 +8907,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L187",
+      "source_location": "L193",
       "weight": 1.0
     },
     {
@@ -8943,7 +8943,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L106",
+      "source_location": "L112",
       "weight": 1.0
     },
     {
@@ -8955,7 +8955,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L50",
+      "source_location": "L56",
       "weight": 1.0
     },
     {
@@ -8967,7 +8967,7 @@
       "confidence_score": 1.0,
       "context": "field",
       "source_file": "internal/schema/schema.go",
-      "source_location": "L66",
+      "source_location": "L72",
       "weight": 1.0
     },
     {
@@ -9091,7 +9091,7 @@
       "weight": 1.0
     },
     {
-      "source": "cmd_commands_test_testextractcliemitsv3cpu",
+      "source": "cmd_commands_test_testextractclistampstheschemaversion",
       "target": "go_type_testing_t",
       "relation": "references",
       "_origin": "ast",
@@ -12600,7 +12600,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "AGENTS.md",
-      "source_location": "L211",
+      "source_location": "L218",
       "weight": 1.0
     },
     {
@@ -12611,7 +12611,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "AGENTS.md",
-      "source_location": "L318",
+      "source_location": "L328",
       "weight": 1.0
     },
     {
@@ -12622,7 +12622,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "AGENTS.md",
-      "source_location": "L354",
+      "source_location": "L364",
       "weight": 1.0
     },
     {
@@ -12633,7 +12633,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "AGENTS.md",
-      "source_location": "L393",
+      "source_location": "L403",
       "weight": 1.0
     },
     {
@@ -12644,7 +12644,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "AGENTS.md",
-      "source_location": "L421",
+      "source_location": "L431",
       "weight": 1.0
     },
     {
@@ -12655,7 +12655,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "AGENTS.md",
-      "source_location": "L438",
+      "source_location": "L448",
       "weight": 1.0
     },
     {
@@ -12666,7 +12666,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "AGENTS.md",
-      "source_location": "L459",
+      "source_location": "L469",
       "weight": 1.0
     },
     {
@@ -12721,7 +12721,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "AGENTS.md",
-      "source_location": "L173",
+      "source_location": "L179",
       "weight": 1.0
     },
     {
@@ -12732,7 +12732,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "AGENTS.md",
-      "source_location": "L209",
+      "source_location": "L216",
       "weight": 1.0
     },
     {
@@ -12754,7 +12754,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "AGENTS.md",
-      "source_location": "L545",
+      "source_location": "L555",
       "weight": 1.0
     },
     {
@@ -12935,7 +12935,7 @@
     },
     {
       "source": "cmd_commands_test",
-      "target": "cmd_commands_test_testextractcliemitsv3cpu",
+      "target": "cmd_commands_test_testextractclistampstheschemaversion",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -15806,13 +15806,24 @@
     },
     {
       "source": "internal_schema_schema",
+      "target": "schema_hotspot",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "internal/schema/schema.go",
+      "source_location": "L101",
+      "weight": 1.0
+    },
+    {
+      "source": "internal_schema_schema",
       "target": "internal_schema_schema_go_schema_sourceexcerpt",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/schema/schema.go",
-      "source_location": "L110",
+      "source_location": "L116",
       "weight": 1.0
     },
     {
@@ -15823,7 +15834,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/schema/schema.go",
-      "source_location": "L136",
+      "source_location": "L142",
       "weight": 1.0
     },
     {
@@ -15834,7 +15845,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/schema/schema.go",
-      "source_location": "L151",
+      "source_location": "L157",
       "weight": 1.0
     },
     {
@@ -15845,7 +15856,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/schema/schema.go",
-      "source_location": "L176",
+      "source_location": "L182",
       "weight": 1.0
     },
     {
@@ -15856,7 +15867,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/schema/schema.go",
-      "source_location": "L192",
+      "source_location": "L198",
       "weight": 1.0
     },
     {
@@ -15867,7 +15878,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/schema/schema.go",
-      "source_location": "L240",
+      "source_location": "L246",
       "weight": 1.0
     },
     {
@@ -15878,18 +15889,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/schema/schema.go",
-      "source_location": "L279",
-      "weight": 1.0
-    },
-    {
-      "source": "internal_schema_schema",
-      "target": "internal_schema_schema_go_schema_extractresult",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "internal/schema/schema.go",
-      "source_location": "L29",
+      "source_location": "L285",
       "weight": 1.0
     },
     {
@@ -15900,7 +15900,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/schema/schema.go",
-      "source_location": "L300",
+      "source_location": "L306",
       "weight": 1.0
     },
     {
@@ -15911,7 +15911,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/schema/schema.go",
-      "source_location": "L315",
+      "source_location": "L321",
       "weight": 1.0
     },
     {
@@ -15922,7 +15922,18 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/schema/schema.go",
-      "source_location": "L337",
+      "source_location": "L343",
+      "weight": 1.0
+    },
+    {
+      "source": "internal_schema_schema",
+      "target": "internal_schema_schema_go_schema_extractresult",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "internal/schema/schema.go",
+      "source_location": "L35",
       "weight": 1.0
     },
     {
@@ -15933,7 +15944,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/schema/schema.go",
-      "source_location": "L346",
+      "source_location": "L352",
       "weight": 1.0
     },
     {
@@ -15944,7 +15955,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/schema/schema.go",
-      "source_location": "L385",
+      "source_location": "L391",
       "weight": 1.0
     },
     {
@@ -15955,7 +15966,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/schema/schema.go",
-      "source_location": "L395",
+      "source_location": "L401",
       "weight": 1.0
     },
     {
@@ -15966,7 +15977,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/schema/schema.go",
-      "source_location": "L48",
+      "source_location": "L54",
       "weight": 1.0
     },
     {
@@ -15977,18 +15988,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/schema/schema.go",
-      "source_location": "L77",
-      "weight": 1.0
-    },
-    {
-      "source": "internal_schema_schema",
-      "target": "schema_hotspot",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "internal/schema/schema.go",
-      "source_location": "L95",
+      "source_location": "L83",
       "weight": 1.0
     },
     {
@@ -18819,5 +18819,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "1595515e3f4424bba63096fc929847c59dfe1c50"
+  "built_at_commit": "2f2e642eb23ed40870900c9a9c0acb49449bc9d1"
 }
