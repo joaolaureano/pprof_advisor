@@ -66,12 +66,22 @@ type ProfileMeta struct {
 }
 
 // ExcludedCost is one function kept out of the ranking, with what it cost.
+//
+// Read FromFocus, not Cum. Cum is this function's cost across the whole
+// profile, which for a filtered frame usually answers the wrong question: on a
+// short benchmark, idle netpoller threads give runtime.kevent 40% of cum while
+// having nothing to do with the code under test. FromFocus counts only samples
+// in which the code under test called this function, directly or through
+// others, and it is what this list is ranked by.
 type ExcludedCost struct {
 	Function string  `json:"function"`
 	Flat     int64   `json:"flat"`
 	FlatPct  float64 `json:"flat_pct"`
 	Cum      int64   `json:"cum"`
 	CumPct   float64 `json:"cum_pct"`
+	// FromFocus is the cost on paths that pass through the focus package.
+	FromFocus    int64   `json:"from_focus"`
+	FromFocusPct float64 `json:"from_focus_pct"`
 }
 
 // Hotspot is one function ranked by its self cost.

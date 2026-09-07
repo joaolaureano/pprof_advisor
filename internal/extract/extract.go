@@ -40,9 +40,17 @@ type functionStats struct {
 	// number for CPU, and differ for memory, where the leaf is the allocator.
 	// selfFlat is never reported: it exists because focus inference has to
 	// run before attribution can, and needs a cost to rank modules by.
-	flat      int64
-	selfFlat  int64
-	cum       int64
+	flat     int64
+	selfFlat int64
+	cum      int64
+	// fromFocus is cost on paths that pass through the focus package: the
+	// value of every sample in which this function was called, directly or
+	// not, by the code under test. It exists because cum answers the wrong
+	// question for a filtered frame. On a short benchmark, idle netpoller
+	// threads put runtime.kevent at 40% of cum while having nothing to do with
+	// the code under test, which pushes the frames that actually explain the
+	// cost off the list this package reports.
+	fromFocus int64
 	minLine   int
 	lineCosts map[int]int64
 }
@@ -151,13 +159,28 @@ func FromProfile(p *profile.Profile, path string, opts Options) (*schema.Extract
 		focus = inferFocus(survivors)
 	}
 
+	// Now that focus is known, charge the filtered frames that the code under
+	// test actually reached. See functionStats.fromFocus.
+	attributeFromFocus(p, valueIndex, focus, getStats)
+
 	// Second pass: charge each sample to a frame, now that focus is known.
 	attribute(p, valueIndex, cfg, focus, getStats)
 	if len(focus) > 0 {
+		// Everything outside the focus package leaves the ranking, but it does
+		// not leave the report: these are the frames the code under test
+		// called, and they are frequently the whole explanation. A prompt
+		// builder that spends half its time in regexp.Compile looks like a
+		// slow prompt builder until this list says otherwise. Dropping them
+		// silently, as this did, is what made the excluded list unable to
+		// answer the question it exists for.
 		filtered := survivors[:0]
 		for _, s := range survivors {
 			if matchesAnyPrefix(s.function.Name, focus) {
 				filtered = append(filtered, s)
+				continue
+			}
+			if !harnessFunction(s.function.Name) {
+				excluded = append(excluded, s)
 			}
 		}
 		survivors = filtered
@@ -499,6 +522,49 @@ func sourceExcerpt(filename string, fallbackLine, context int, lineCosts map[int
 	return &schema.SourceExcerpt{File: filename, StartLine: start, EndLine: end, Lines: excerptLines, LineCosts: excerptCosts}
 }
 
+// attributeFromFocus charges each sample to the frames the focus package called.
+//
+// pprof orders a sample's locations leaf first, so the frames from the leaf up
+// to the first focus frame are exactly what the code under test called. A
+// sample with no focus frame at all is discarded: it is work this program did
+// not ask for — an idle netpoller thread, a background GC worker — and counting
+// it is what made the filtered-cost report unreadable.
+func attributeFromFocus(p *profile.Profile, valueIndex int, focus []string, getStats func(*profile.Function) *functionStats) {
+	if len(focus) == 0 {
+		return
+	}
+	seen := make(map[string]*profile.Function)
+	for _, sample := range p.Sample {
+		if sample == nil || valueIndex >= len(sample.Value) {
+			continue
+		}
+		clear(seen)
+		hitFocus := false
+	frames:
+		for _, loc := range sample.Location {
+			if loc == nil {
+				continue
+			}
+			for _, line := range loc.Line {
+				if line.Function == nil {
+					continue
+				}
+				if matchesAnyPrefix(line.Function.Name, focus) {
+					hitFocus = true
+					break frames
+				}
+				seen[line.Function.Name] = line.Function
+			}
+		}
+		if !hitFocus {
+			continue
+		}
+		for _, fn := range seen {
+			getStats(fn).fromFocus += sample.Value[valueIndex]
+		}
+	}
+}
+
 // topExcluded reports the hottest filtered-out functions, so the caller can see
 // where the discarded time went instead of only how much was discarded.
 func topExcluded(excluded []*functionStats, total int64, n int) []schema.ExcludedCost {
@@ -507,7 +573,13 @@ func topExcluded(excluded []*functionStats, total int64, n int) []schema.Exclude
 	// cumulative time finds the one that explains the shape of the cost, such
 	// as runtime.convTnoptr sitting under every iteration of a loop that boxes
 	// a value into an interface.
+	// Ranked by what the code under test reached, not by global cumulative:
+	// the point of this list is to explain the cost that filtering removed,
+	// and a frame no focus code ever called explains nothing.
 	sort.Slice(excluded, func(i, j int) bool {
+		if excluded[i].fromFocus != excluded[j].fromFocus {
+			return excluded[i].fromFocus > excluded[j].fromFocus
+		}
 		if excluded[i].cum != excluded[j].cum {
 			return excluded[i].cum > excluded[j].cum
 		}
@@ -523,10 +595,12 @@ func topExcluded(excluded []*functionStats, total int64, n int) []schema.Exclude
 		}
 		c := schema.ExcludedCost{
 			Function: s.function.Name, Flat: s.flat, Cum: s.cum,
+			FromFocus: s.fromFocus,
 		}
 		if total != 0 {
 			c.FlatPct = float64(s.flat) / float64(total) * 100
 			c.CumPct = float64(s.cum) / float64(total) * 100
+			c.FromFocusPct = float64(s.fromFocus) / float64(total) * 100
 		}
 		out = append(out, c)
 	}

@@ -6,12 +6,12 @@ Profile Analysis
   Duration:       10.70s
   Focus:          example.com/profadvisor/fixture
 
-Filtered out (not ranked):
-  runtime.systemstack                 13.0% cumulative,   0.0% self
-  runtime.kevent                       9.1% cumulative,   9.1% self
-  runtime.netpoll                      9.1% cumulative,   0.0% self
-  runtime.startTheWorldWithSema        9.1% cumulative,   0.0% self
-  runtime.gcStart.func4                9.0% cumulative,   0.0% self
+Filtered out (not ranked), by cost reached from the focus package:
+  internal/stringslite.HasPrefix       6.6% from focus,   6.6% of profile
+  runtime.memequal                     6.2% from focus,   6.2% of profile
+  strings.HasPrefix                    4.1% from focus,   4.1% of profile
+  internal/stringslite.TrimPrefix      2.6% from focus,   2.6% of profile
+  strings.TrimPrefix                   2.6% from focus,   2.6% of profile
 
 Hotspots:
 

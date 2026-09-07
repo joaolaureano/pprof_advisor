@@ -106,6 +106,58 @@ func TestEmptyDiffIsError(t *testing.T) {
 	}
 }
 
+func TestApplyIgnoresUnrelatedUntrackedFiles(t *testing.T) {
+	dir := seedRepo(t)
+	// Create an untracked file in the output directory, simulating the
+	// profadvisor-out/pkg.test binary that capture creates.
+	outDir := filepath.Join(dir, "profadvisor-out", "x")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "pkg.test"), []byte("binary"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Applying should succeed despite the untracked file.
+	d := diagnosis(validDiff())
+	res, err := Run(context.Background(), d, Options{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Branch == "" {
+		t.Fatalf("expected a branch, got empty string")
+	}
+	// The untracked file must NOT be in the commit.
+	commit := gitOutput(t, dir, "show", "--name-only", "--pretty=format:", "HEAD")
+	if strings.Contains(commit, "profadvisor-out") || strings.Contains(commit, "pkg.test") {
+		t.Fatalf("untracked file unexpectedly in commit:\n%s", commit)
+	}
+	// The patched file must be in the commit.
+	if !strings.Contains(commit, "value.go") {
+		t.Fatalf("patched file not in commit:\n%s", commit)
+	}
+}
+
+func TestApplyStillRefusesModifiedTrackedFiles(t *testing.T) {
+	dir := seedRepo(t)
+	// Modify a tracked file (value.go) without committing.
+	if err := os.WriteFile(filepath.Join(dir, "value.go"), []byte("package seed\n\nfunc Value() int { return 3 }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Attempting to apply should still fail due to the uncommitted change.
+	d := diagnosis(validDiff())
+	_, err := Run(context.Background(), d, Options{Dir: dir})
+	if err == nil {
+		t.Fatal("Run succeeded despite uncommitted tracked changes")
+	}
+	if !strings.Contains(err.Error(), "uncommitted changes") {
+		t.Fatalf("error did not mention uncommitted changes: %v", err)
+	}
+	// No branch should have been created.
+	if got := gitOutput(t, dir, "branch", "--list", "profadvisor/*"); got != "" {
+		t.Fatalf("unexpected branch: %q", got)
+	}
+}
+
 func seedRepo(t *testing.T) string {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {

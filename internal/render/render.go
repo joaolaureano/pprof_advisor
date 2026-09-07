@@ -157,10 +157,15 @@ func textExtract(r *schema.ExtractResult) (string, error) {
 
 	// Excluded costs (if any)
 	if len(r.Profile.Excluded) > 0 {
-		fmt.Fprintf(&buf, "\nFiltered out (not ranked):\n")
+		// Ordered by what the code under test reached, which is the only
+		// column that explains the cost filtering removed. The global
+		// cumulative is shown beside it because the gap between the two is
+		// itself informative: a large cum with a small from-focus is a frame
+		// busy on some other goroutine.
+		fmt.Fprintf(&buf, "\nFiltered out (not ranked), by cost reached from the focus package:\n")
 		for _, e := range r.Profile.Excluded {
-			fmt.Fprintf(&buf, "  %-34s %5.1f%% cumulative, %5.1f%% self\n",
-				e.Function, e.CumPct, e.FlatPct)
+			fmt.Fprintf(&buf, "  %-34s %5.1f%% from focus, %5.1f%% of profile\n",
+				e.Function, e.FromFocusPct, e.CumPct)
 		}
 	}
 

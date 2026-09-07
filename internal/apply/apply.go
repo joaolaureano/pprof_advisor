@@ -38,7 +38,10 @@ func Run(ctx context.Context, d *schema.Diagnosis, opts Options) (*schema.ApplyR
 		return nil, fmt.Errorf("apply: diagnosis diff is required")
 	}
 
-	status, stderr, err := git(ctx, opts.Dir, nil, "status", "--porcelain")
+	// Check for tracked modifications only. The check exists so the suggestion
+	// commit contains the patch and nothing else; precise staging (not a clean
+	// working tree) is what actually guarantees that.
+	status, stderr, err := git(ctx, opts.Dir, nil, "status", "--porcelain", "-uno")
 	if err != nil {
 		return nil, gitError("checking working tree", err, stderr)
 	}
@@ -97,7 +100,10 @@ func Run(ctx context.Context, d *schema.Diagnosis, opts Options) (*schema.ApplyR
 		return nil, gitError("applying diff", err, stderr)
 	}
 
-	_, stderr, err = git(ctx, opts.Dir, nil, "add", "-A")
+	// Stage only the files the patch touches, using "--" to prevent filenames
+	// starting with a dash from being interpreted as flags.
+	args := append([]string{"add", "--"}, res.FilesChanged...)
+	_, stderr, err = git(ctx, opts.Dir, nil, args...)
 	if err != nil {
 		return nil, gitError("staging changes", err, stderr)
 	}

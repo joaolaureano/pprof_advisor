@@ -10,6 +10,14 @@ import (
 	"strings"
 )
 
+// Compiled once. Render is called dozens of times to build a single prompt, and
+// compiling these per call cost more than half of that prompt's CPU time — the
+// tool found it in its own profile.
+var (
+	placeholderPattern = regexp.MustCompile(`\{([a-z][a-z0-9_]*)\}`)
+	namePattern        = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+)
+
 // Catalog holds the validated prompt templates.
 type Catalog struct {
 	version int
@@ -19,6 +27,10 @@ type Catalog struct {
 type entry struct {
 	Placeholders []string `json:"placeholders"`
 	Text         string   `json:"text"`
+	// declared is Placeholders as a set, built once at load. Render checks
+	// supplied variables against it on every call, and rebuilding the map each
+	// time allocated once per call for a set that never changes.
+	declared map[string]bool
 }
 
 // embeddedJSON holds the compiled-in catalog.
@@ -58,7 +70,6 @@ func load(data []byte) (*Catalog, error) {
 	}
 
 	// Validate each entry.
-	placeholderRegex := regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 	for key, ent := range raw.Prompts {
 		if ent == nil {
 			errs = append(errs, fmt.Sprintf("entry %q is null", key))
@@ -68,7 +79,7 @@ func load(data []byte) (*Catalog, error) {
 		// Check placeholders are valid identifiers and unique.
 		seen := make(map[string]bool)
 		for _, p := range ent.Placeholders {
-			if !placeholderRegex.MatchString(p) {
+			if !namePattern.MatchString(p) {
 				errs = append(errs, fmt.Sprintf("entry %q: placeholder %q does not match [a-z][a-z0-9_]*", key, p))
 			}
 			if seen[p] {
@@ -104,10 +115,11 @@ func load(data []byte) (*Catalog, error) {
 
 		// Check declared placeholders match found placeholders.
 		found := extractPlaceholders(text)
-		declared := make(map[string]bool)
+		declared := make(map[string]bool, len(ent.Placeholders))
 		for _, p := range ent.Placeholders {
 			declared[p] = true
 		}
+		ent.declared = declared
 
 		for p := range found {
 			if !declared[p] {
@@ -138,8 +150,7 @@ func extractPlaceholders(text string) map[string]bool {
 	temp := strings.ReplaceAll(text, "{{", "\x00")
 	temp = strings.ReplaceAll(temp, "}}", "\x01")
 	// Now find valid placeholders in the temp version.
-	placeholderRegex := regexp.MustCompile(`\{([a-z][a-z0-9_]*)\}`)
-	matches := placeholderRegex.FindAllStringSubmatch(temp, -1)
+	matches := placeholderPattern.FindAllStringSubmatch(temp, -1)
 	for _, m := range matches {
 		found[m[1]] = true
 	}
@@ -154,19 +165,13 @@ func (c *Catalog) Render(key string, vars map[string]string) (string, error) {
 		return "", fmt.Errorf("unknown key: %s", key)
 	}
 
-	// Check that supplied variables match declared placeholders.
-	declared := make(map[string]bool)
-	for _, p := range ent.Placeholders {
-		declared[p] = true
-	}
-
 	for v := range vars {
-		if !declared[v] {
+		if !ent.declared[v] {
 			return "", fmt.Errorf("key %s: unknown variable %s", key, v)
 		}
 	}
 
-	for p := range declared {
+	for p := range ent.declared {
 		if _, ok := vars[p]; !ok {
 			return "", fmt.Errorf("key %s: missing variable %s", key, p)
 		}
@@ -179,8 +184,7 @@ func (c *Catalog) Render(key string, vars map[string]string) (string, error) {
 	result = strings.ReplaceAll(result, "}}", "\x01")
 
 	// Then substitute variables.
-	placeholderRegex := regexp.MustCompile(`\{([a-z][a-z0-9_]*)\}`)
-	result = placeholderRegex.ReplaceAllStringFunc(result, func(match string) string {
+	result = placeholderPattern.ReplaceAllStringFunc(result, func(match string) string {
 		name := match[1 : len(match)-1]
 		return vars[name]
 	})

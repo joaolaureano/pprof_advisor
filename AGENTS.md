@@ -194,11 +194,24 @@ a callee is hotter than its caller: a per-pixel loop can spend more time inside
 `image/color` than in the function that runs it, and focusing there would hide
 the only code the user can change. `--focus` overrides the inference.
 
-The output also reports **where the filtered cost went**, largest by cumulative
-cost. This matters because filtering can remove the explanation along with the
-noise: a loop that boxes a value into an interface shows up as one hot function
-plus a wall of `runtime.convTnoptr` and `runtime.mallocgc`, and only the second
-half says that the fix is about allocation.
+The output also reports **where the filtered cost went**, in `excluded`. This
+matters because filtering can remove the explanation along with the noise: a
+loop that boxes a value into an interface shows up as one hot function plus a
+wall of `runtime.convTnoptr` and `runtime.mallocgc`, and only the second half
+says that the fix is about allocation.
+
+That list is ranked by `from_focus` — the cost on paths the code under test
+actually reached — and **not** by `cum`, which is the function's share of the
+whole profile. The difference decides whether the list is usable. On a short
+benchmark, idle netpoller threads give `runtime.kevent` 40% of `cum` while
+having nothing to do with your code; ranking by that buries the frames that
+explain anything. Both numbers are reported, and the gap between them is itself
+informative: a large `cum` with a small `from_focus` is a frame busy on some
+other goroutine.
+
+The list also includes frames outside the focus package, not just runtime
+noise. A function that spends half its time in `regexp.Compile` looks merely
+slow until `excluded` names the callee.
 
 ### `profadvisor analyze <extract.json>`
 

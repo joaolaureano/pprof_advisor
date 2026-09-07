@@ -20,6 +20,14 @@ import (
 	"github.com/joaolaureano/profadvisor/internal/schema"
 )
 
+// position is a comparable key for the position of a compiler diagnostic.
+// It replaces string formatting to avoid allocations per line.
+type position struct {
+	file string
+	line int
+	col  int
+}
+
 // Result is what Parse returns: the findings extracted from compiler stderr,
 // along with counts and metadata about the parsing process.
 type Result struct {
@@ -40,8 +48,14 @@ type Result struct {
 // warning is appended if the toolchain version exceeds what the parser was
 // validated against.
 func Parse(stderr []byte, toolchainVersion string) (*Result, error) {
+	// Preallocate Findings based on input size. The measured ratio on real
+	// output is roughly one finding per 4-8 newlines; we reserve 1/4 of the
+	// newline count to stay conservative without overallocating on every run.
+	// Unrecognized is left nil: it is normally empty and reserving for it
+	// would waste memory on healthy output.
+	findingsCapacity := (bytes.Count(stderr, []byte("\n")) + 3) / 4
 	r := &Result{
-		Findings: []schema.EscapeFinding{},
+		Findings: make([]schema.EscapeFinding, 0, findingsCapacity),
 		Packages: []string{},
 		Files:    []string{},
 		Warnings: []string{},
@@ -56,25 +70,44 @@ func Parse(stderr []byte, toolchainVersion string) (*Result, error) {
 	seenFiles := make(map[string]bool)
 	truncated := 0
 
-	// Parse line by line.
-	lines := bytes.Split(stderr, []byte("\n"))
+	// Convert input to string once and iterate with IndexByte. Substrings of a
+	// string share the backing array, so per-line cost is zero copies.
+	fullText := string(stderr)
 	currentPackage := ""
-	pendingBlocks := make(map[string]*schema.EscapeFinding) // keyed by "file:line:col"
+	pendingBlocks := make(map[position]*schema.EscapeFinding)
 
-	for _, line := range lines {
-		text := string(line)
+	// Iterate through the string line by line using IndexByte to find newlines.
+	for i := 0; i <= len(fullText); {
+		// Find the next newline or end of string.
+		nextNewline := strings.IndexByte(fullText[i:], '\n')
+		var lineEnd int
+		if nextNewline < 0 {
+			lineEnd = len(fullText)
+		} else {
+			lineEnd = i + nextNewline
+		}
 
-		// A trailing newline splits into a final empty element, and the go tool
+		// Extract the line (substrings share the backing array).
+		lineText := fullText[i:lineEnd]
+
+		// Move to next line start.
+		if lineEnd < len(fullText) {
+			i = lineEnd + 1
+		} else {
+			i = len(fullText) + 1
+		}
+
+		// A trailing newline creates an empty line at the end, and the go tool
 		// emits blank lines of its own. Neither is a diagnostic, so neither is
 		// counted: Total is the number of lines the parser had to account for.
-		if strings.TrimSpace(text) == "" {
+		if strings.TrimSpace(lineText) == "" {
 			continue
 		}
 		r.Total++
 
 		// Check for package header.
-		if strings.HasPrefix(text, "# ") {
-			currentPackage = strings.TrimPrefix(text, "# ")
+		if strings.HasPrefix(lineText, "# ") {
+			currentPackage = strings.TrimPrefix(lineText, "# ")
 			r.Ignored++
 			if !seenPackages[currentPackage] {
 				seenPackages[currentPackage] = true
@@ -84,12 +117,12 @@ func Parse(stderr []byte, toolchainVersion string) (*Result, error) {
 		}
 
 		// Try to parse position: file:line:col: rest
-		file, line, col, rest, ok := parsePosition(text)
+		file, line, col, rest, ok := parsePosition(lineText)
 		if !ok {
 			// No position prefix.
 			r.Unrecognized = append(r.Unrecognized, schema.RawDiagnostic{
 				Package: currentPackage,
-				Text:    text,
+				Text:    lineText,
 			})
 			continue
 		}
@@ -99,7 +132,7 @@ func Parse(stderr []byte, toolchainVersion string) (*Result, error) {
 			file = strings.TrimPrefix(file, "./")
 		}
 
-		posKey := fmt.Sprintf("%s:%d:%d", file, line, col)
+		posKey := position{file: file, line: line, col: col}
 
 		// Track file.
 		if !seenFiles[file] {
@@ -127,7 +160,7 @@ func Parse(stderr []byte, toolchainVersion string) (*Result, error) {
 				File:    file,
 				Line:    line,
 				Column:  col,
-				Text:    text,
+				Text:    lineText,
 			})
 			continue
 		}
@@ -136,13 +169,15 @@ func Parse(stderr []byte, toolchainVersion string) (*Result, error) {
 		if isExplanationHeading(rest) {
 			heading := parseExplanationHeading(rest)
 			if heading != nil {
-				// Create a pending block for this position.
+				// Create a pending block for this position. Give Flow a small initial
+				// capacity: a typical explanation has a handful of steps.
 				pendingBlocks[posKey] = &schema.EscapeFinding{
 					Package:  currentPackage,
 					File:     file,
 					Line:     line,
 					Column:   col,
 					Function: heading.function,
+					Flow:     make([]schema.EscapeFlowStep, 0, 4),
 				}
 			}
 			r.Ignored++
@@ -156,7 +191,7 @@ func Parse(stderr []byte, toolchainVersion string) (*Result, error) {
 		}
 
 		// Check for escape template.
-		finding := parseEscapeTemplate(rest, file, line, col, currentPackage, text)
+		finding := parseEscapeTemplate(rest, file, line, col, currentPackage, lineText)
 		if finding != nil {
 			r.Recognized++
 			// If a pending block exists at this position, attach its function and flow.
@@ -175,7 +210,7 @@ func Parse(stderr []byte, toolchainVersion string) (*Result, error) {
 			File:    file,
 			Line:    line,
 			Column:  col,
-			Text:    text,
+			Text:    lineText,
 		})
 	}
 
@@ -197,28 +232,46 @@ func Parse(stderr []byte, toolchainVersion string) (*Result, error) {
 //
 // The file is everything before the numeric tail rather than everything before
 // the first colon, so a Windows drive letter or a path containing a colon does
-// not split in the wrong place.
+// not split in the wrong place. To find the numeric tail without allocating,
+// we use LastIndexByte to locate the colons directly and extract the numeric
+// parts, avoiding strings.Split.
 func parsePosition(s string) (file string, line, col int, rest string, ok bool) {
 	idx := strings.Index(s, ": ")
 	if idx < 0 {
 		return "", 0, 0, "", false
 	}
-	parts := strings.Split(s[:idx], ":")
+	prefix := s[:idx]
 	rest = s[idx+2:]
 
-	if n := len(parts); n >= 3 {
-		lineNum, errL := strconv.Atoi(parts[n-2])
-		colNum, errC := strconv.Atoi(parts[n-1])
+	// Try to find two numeric parts at the end, separated by colon.
+	// Start from the right: the last colon separates potential col from line,
+	// and the second-to-last separates line from file.
+	lastColon := strings.LastIndexByte(prefix, ':')
+	if lastColon < 0 {
+		return "", 0, 0, "", false
+	}
+
+	// Try 3-part form: file:line:col
+	// The second-to-last colon (if it exists) separates file from line.
+	secondLastColon := strings.LastIndexByte(prefix[:lastColon], ':')
+	if secondLastColon >= 0 {
+		// Try parsing as file:line:col
+		lineStr := prefix[secondLastColon+1 : lastColon]
+		colStr := prefix[lastColon+1:]
+		lineNum, errL := strconv.Atoi(lineStr)
+		colNum, errC := strconv.Atoi(colStr)
 		if errL == nil && errC == nil {
-			return strings.Join(parts[:n-2], ":"), lineNum, colNum, rest, true
+			return prefix[:secondLastColon], lineNum, colNum, rest, true
 		}
 	}
-	if n := len(parts); n >= 2 {
-		lineNum, err := strconv.Atoi(parts[n-1])
-		if err == nil {
-			return strings.Join(parts[:n-1], ":"), lineNum, 0, rest, true
-		}
+
+	// Try 2-part form: file:line (no column)
+	lineStr := prefix[lastColon+1:]
+	lineNum, err := strconv.Atoi(lineStr)
+	if err == nil {
+		return prefix[:lastColon], lineNum, 0, rest, true
 	}
+
 	return "", 0, 0, "", false
 }
 

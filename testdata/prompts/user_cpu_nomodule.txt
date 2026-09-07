@@ -8,11 +8,11 @@ Attributed to example.com/profadvisor/fixture: 6.63s (67.9% of total; the rest i
 standard-library cost that has been filtered out of the ranking below)
 
 Where the filtered cost went (these are consequences of the code below, not things to edit directly):
-  runtime.systemstack                 13.0% cumulative,   0.0% self
-  runtime.kevent                       9.1% cumulative,   9.1% self
-  runtime.netpoll                      9.1% cumulative,   0.0% self
-  runtime.startTheWorldWithSema        9.1% cumulative,   0.0% self
-  runtime.gcStart.func4                9.0% cumulative,   0.0% self
+  internal/stringslite.HasPrefix       6.6% cumulative,   6.6% self
+  runtime.memequal                     6.2% cumulative,   6.2% self
+  strings.HasPrefix                    4.1% cumulative,   0.1% self
+  internal/stringslite.TrimPrefix      2.6% cumulative,   0.0% self
+  strings.TrimPrefix                   2.6% cumulative,   0.0% self
 
 # Hotspots, hottest first
 
