@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -53,6 +54,29 @@ func collectPackageLevelNames(files []*ast.File) map[string]bool {
 		}
 	}
 	return names
+}
+
+// parseImplementations parses "Interface=Type" pairs from the CLI, returning
+// a map keyed by interface name as written. Rejects duplicates, empty keys/values, or malformed syntax.
+func parseImplementations(pairs []string) (map[string]string, error) {
+	result := make(map[string]string)
+	for _, pair := range pairs {
+		key, value, found := strings.Cut(pair, "=")
+		if !found {
+			return nil, fmt.Errorf("malformed --impl: %q (expected format: Interface=Type)", pair)
+		}
+		if key == "" {
+			return nil, fmt.Errorf("malformed --impl: %q (empty interface name)", pair)
+		}
+		if value == "" {
+			return nil, fmt.Errorf("malformed --impl: %q (empty type name)", pair)
+		}
+		if _, exists := result[key]; exists {
+			return nil, fmt.Errorf("malformed --impl: duplicate key %q in %q", key, pair)
+		}
+		result[key] = value
+	}
+	return result, nil
 }
 
 func resolveTarget(ctx context.Context, o Options) (Target, error) {
@@ -187,13 +211,22 @@ func resolveTarget(ctx context.Context, o Options) (Target, error) {
 	if sig.Recv() != nil || sig.TypeParams().Len() != 0 || sig.Variadic() || sig.Params().Len() == 0 {
 		return target, fmt.Errorf("function must be non-generic, non-variadic and accept one or more fuzzable arguments")
 	}
+
+	// Parse --impl pairs early so we error out before type-checking parameters.
+	impls, err := parseImplementations(o.Implementations)
+	if err != nil {
+		return target, err
+	}
+
 	inputs := make([]string, 0, sig.Params().Len())
 	argumentTypes := make([]string, sig.Params().Len())
 	argumentTemplates := make([]string, sig.Params().Len())
+	chosen := make(map[string]string) // output: interface name -> concrete type actually used
 	for i := 0; i < sig.Params().Len(); i++ {
 		parameterType := sig.Params().At(i).Type()
 		argumentTypes[i] = goTypeString(parameterType, pkg)
-		leaves, template, err := flattenFuzzArgument(parameterType, pkg)
+		seen := make(map[string]bool) // cycle guard: path set for this parameter
+		leaves, template, err := flattenFuzzArgument(parameterType, pkg, impls, chosen, seen)
 		if err != nil {
 			return target, fmt.Errorf("parameter %d: %w", i+1, err)
 		}
@@ -203,19 +236,200 @@ func resolveTarget(ctx context.Context, o Options) (Target, error) {
 	if len(inputs) == 0 {
 		return target, fmt.Errorf("function must include at least one native Go fuzz input; empty structs cannot be fuzzed")
 	}
-	return Target{Dir: p.Dir, Package: p.ImportPath, Name: p.Name, Function: o.Function, ArgumentTypes: argumentTypes, InputTypes: inputs, ArgumentTemplates: argumentTemplates, GoVersion: version, FuzzName: fuzzName, BenchmarkName: benchmarkName}, nil
+
+	// Build Target.Implementations as sorted "Iface=Type" strings.
+	implementations := make([]string, 0, len(chosen))
+	for iface, impl := range chosen {
+		implementations = append(implementations, iface+"="+impl)
+	}
+	sort.Strings(implementations)
+
+	return Target{Dir: p.Dir, Package: p.ImportPath, Name: p.Name, Function: o.Function, ArgumentTypes: argumentTypes, InputTypes: inputs, Implementations: implementations, ArgumentTemplates: argumentTemplates, GoVersion: version, FuzzName: fuzzName, BenchmarkName: benchmarkName}, nil
 }
 
-// flattenFuzzArgument turns a function argument into the native values that
-// testing.F can accept. Structs are reconstructed with keyed literals in the
-// generated same-package test, so no reflection or serialization runs in a
-// benchmark loop. Only local structs are accepted: external struct names would
-// require imports and may expose inaccessible fields.
-func flattenFuzzArgument(typ types.Type, pkg *types.Package) ([]string, string, error) {
+// resolveInterfaceImplementation finds a concrete named type that implements the
+// given interface. If impls has an entry for the interface, it uses that after
+// validation. Otherwise, it scans pkg.Scope().Names() and returns the first
+// candidate that implements the interface and flattens (or is close enough).
+// The returned string is the implementation's bare name, and needsPointer indicates
+// whether to wrap the template as &T{...} rather than T{...}.
+// resolveInterfaceImplementation picks the concrete local type to instantiate
+// for an interface parameter, and reports whether it must be addressed to
+// satisfy the interface.
+//
+// The benchmark measures that type, not "the interface": the cost behind an
+// interface call is entirely the implementation's. So an ambiguous choice is
+// never made silently, and an explicit --impl always wins over discovery — a
+// silent fallback would let the user ask for one program and measure another.
+func resolveInterfaceImplementation(iface *types.Interface, ifaceType *types.Named, pkg *types.Package, impls map[string]string, seen map[string]bool) (string, bool, error) {
+	name := ifaceType.Obj().Name()
+	// Both spellings are accepted, so --impl io.Reader=T reads as naturally as
+	// --impl Reader=T for an interface the target package did not declare.
+	keys := []string{name}
+	if obj := ifaceType.Obj(); obj.Pkg() != nil {
+		keys = append(keys, obj.Pkg().Name()+"."+name)
+	}
+	for _, key := range keys {
+		selected, ok := impls[key]
+		if !ok {
+			continue
+		}
+		pointer, err := localImplements(selected, name, iface, pkg)
+		if err != nil {
+			return "", false, fmt.Errorf("--impl %s=%s: %w", key, selected, err)
+		}
+		return selected, pointer, nil
+	}
+
+	type candidate struct {
+		name    string
+		pointer bool
+	}
+	var candidates []candidate
+	// go/types returns Names sorted, so discovery is deterministic.
+	for _, declared := range pkg.Scope().Names() {
+		typeName, ok := pkg.Scope().Lookup(declared).(*types.TypeName)
+		if !ok {
+			continue
+		}
+		named, ok := typeName.Type().(*types.Named)
+		if !ok || named.Obj().Pkg() != pkg {
+			continue
+		}
+		// An interface satisfies itself, so types.Implements would offer the
+		// interface under resolution as an implementation of itself. It is not
+		// a concrete type and flattening it leads straight back here.
+		if _, isInterface := named.Underlying().(*types.Interface); isInterface {
+			continue
+		}
+		switch {
+		case types.Implements(named, iface):
+			candidates = append(candidates, candidate{declared, false})
+		case types.Implements(types.NewPointer(named), iface):
+			// Methods on a pointer receiver are the norm in Go. Skipping this
+			// case would discard most of the candidates that actually exist.
+			candidates = append(candidates, candidate{declared, true})
+		}
+	}
+	switch len(candidates) {
+	case 0:
+		return "", false, fmt.Errorf("no local type implements %s, and no type is imported to supply one", name)
+	case 1:
+		// Returned without a trial flatten deliberately. If the only candidate
+		// cannot be flattened, its own error — a channel field, a cycle back
+		// through this interface — tells the user far more than a report that
+		// no candidate was found.
+		return candidates[0].name, candidates[0].pointer, nil
+	}
+	// Several types implement it, so the ones that cannot be flattened are not
+	// real choices: they are dropped rather than counted into an ambiguity the
+	// user cannot resolve. The trial runs the real flattener, so it can never
+	// disagree with what generation would do.
+	var usable []candidate
+	all := make([]string, 0, len(candidates))
+	for _, c := range candidates {
+		all = append(all, c.name)
+		trial := make(map[string]bool, len(seen))
+		for path := range seen {
+			trial[path] = true
+		}
+		if _, _, err := flattenFuzzArgument(pkg.Scope().Lookup(c.name).Type(), pkg, impls, map[string]string{}, trial); err == nil {
+			usable = append(usable, c)
+		}
+	}
+	switch len(usable) {
+	case 0:
+		return "", false, fmt.Errorf("%d types implement %s (%s) but none is composed of native Go fuzz types", len(all), name, strings.Join(all, ", "))
+	case 1:
+		return usable[0].name, usable[0].pointer, nil
+	}
+	names := make([]string, 0, len(usable))
+	for _, c := range usable {
+		names = append(names, c.name)
+	}
+	return "", false, fmt.Errorf("multiple types implement %s: %s; pick one with --impl %s=<Type>", name, strings.Join(names, ", "), name)
+}
+
+// localImplements reports whether the named local type satisfies iface, and
+// whether it has to be addressed to do so.
+func localImplements(selected, ifaceName string, iface *types.Interface, pkg *types.Package) (bool, error) {
+	obj := pkg.Scope().Lookup(selected)
+	if obj == nil {
+		return false, fmt.Errorf("%s is not declared in package %s", selected, pkg.Name())
+	}
+	named, ok := obj.Type().(*types.Named)
+	if !ok || named.Obj().Pkg() != pkg {
+		return false, fmt.Errorf("%s is not a type declared in package %s", selected, pkg.Name())
+	}
+	if _, isInterface := named.Underlying().(*types.Interface); isInterface {
+		return false, fmt.Errorf("%s is itself an interface, not a concrete type", selected)
+	}
+	if types.Implements(named, iface) {
+		return false, nil
+	}
+	if types.Implements(types.NewPointer(named), iface) {
+		return true, nil
+	}
+	return false, fmt.Errorf("%s does not implement %s", selected, ifaceName)
+}
+
+func flattenFuzzArgument(typ types.Type, pkg *types.Package, impls map[string]string, chosen map[string]string, seen map[string]bool) ([]string, string, error) {
 	if input := fuzzInputType(typ); input != "" {
 		return []string{input}, "$0", nil
 	}
 	unaliased := types.Unalias(typ)
+
+	// Handle interface types.
+	if iface, ok := unaliased.Underlying().(*types.Interface); ok {
+		ifaceNamed, ok := unaliased.(*types.Named)
+		if !ok {
+			// For anonymous interfaces, provide a more general error mentioning zero methods if applicable
+			if iface.NumMethods() == 0 {
+				return nil, "", fmt.Errorf("interface{} (or any) has zero methods; every type satisfies it so no implementation can be chosen")
+			}
+			return nil, "", fmt.Errorf("anonymous interface cannot be used; a named interface type is required")
+		}
+		if iface.NumMethods() == 0 {
+			return nil, "", fmt.Errorf("interface %s has zero methods (every type satisfies it); no implementation can be chosen", ifaceNamed.Obj().Name())
+		}
+
+		// The interface node carries its own cycle guard. The struct case has
+		// one too, but an implementation reached through a chain of interfaces
+		// would never touch it, and the recursion has to terminate either way.
+		ifaceKey := "interface " + types.TypeString(ifaceNamed, nil)
+		if seen[ifaceKey] {
+			return nil, "", fmt.Errorf("cycle detected through interface %s", ifaceNamed.Obj().Name())
+		}
+		seen[ifaceKey] = true
+		defer delete(seen, ifaceKey)
+
+		implTypeName, needsPointer, err := resolveInterfaceImplementation(iface, ifaceNamed, pkg, impls, seen)
+		if err != nil {
+			return nil, "", err
+		}
+
+		// Get the concrete type from the package scope.
+		implObj := pkg.Scope().Lookup(implTypeName)
+		implNamed := implObj.Type().(*types.Named)
+
+		// Record the choice.
+		chosen[ifaceNamed.Obj().Name()] = implTypeName
+
+		// Recurse into the concrete type. The struct case will handle cycle detection.
+		leaves, template, err := flattenFuzzArgument(implNamed, pkg, impls, chosen, seen)
+
+		if err != nil {
+			return nil, "", err
+		}
+
+		// The template already includes the type name (e.g., "MyReader{...}").
+		// We only need to add & if pointer receiver is needed.
+		if needsPointer {
+			template = "&" + template
+		}
+		return leaves, template, nil
+	}
+
 	underlying, ok := unaliased.Underlying().(*types.Struct)
 	if !ok {
 		return nil, "", fmt.Errorf("must be a native Go fuzz type or a struct composed of native Go fuzz types")
@@ -223,6 +437,17 @@ func flattenFuzzArgument(typ types.Type, pkg *types.Package) ([]string, string, 
 	if named, ok := unaliased.(*types.Named); ok && named.Obj().Pkg() != pkg {
 		return nil, "", fmt.Errorf("struct %s is declared outside the target package", named.Obj().Name())
 	}
+
+	// Check for cycles on entering a named type.
+	if named, ok := unaliased.(*types.Named); ok {
+		fullName := named.Obj().Pkg().Path() + "." + named.Obj().Name()
+		if seen[fullName] {
+			return nil, "", fmt.Errorf("cycle detected in type %s", named.Obj().Name())
+		}
+		seen[fullName] = true
+		defer delete(seen, fullName)
+	}
+
 	inputs := make([]string, 0, underlying.NumFields())
 	fields := make([]string, 0, underlying.NumFields())
 	for i := 0; i < underlying.NumFields(); i++ {
@@ -230,7 +455,7 @@ func flattenFuzzArgument(typ types.Type, pkg *types.Package) ([]string, string, 
 		if field.Name() == "_" {
 			return nil, "", fmt.Errorf("struct contains blank field %d, which cannot be reconstructed", i+1)
 		}
-		leaves, expression, err := flattenFuzzArgument(field.Type(), pkg)
+		leaves, expression, err := flattenFuzzArgument(field.Type(), pkg, impls, chosen, seen)
 		if err != nil {
 			return nil, "", fmt.Errorf("struct field %s: %w", field.Name(), err)
 		}

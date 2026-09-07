@@ -152,17 +152,17 @@ assume nanoseconds.** Version 1 named these fields `*_nanos` and had no
 
 ## Commands
 
-### `profadvisor benchgen --dir <repo> --pkg <package> --func <name> --corpus <directory> --out <directory> [--write]`
+### `profadvisor benchgen --dir <repo> --pkg <package> --func <name> --corpus <directory> --out <directory> [--write] [--impl Interface=Type ...]`
 
 Generates offline same-package fuzz tests and benchmarks from a frozen Go fuzz
 v1 corpus. Accepts one non-generic, non-variadic package-level function with one
 or more native Go fuzz arguments: `string`, `[]byte`, `bool`, every built-in signed or
 unsigned integer type, `rune`, `byte`, `float32`, or `float64`, or local structs
-composed recursively from those types, including unexported functions. Struct
-fields are flattened recursively in declaration order and reconstructed with keyed
-literals. Defined scalar types, pointers, maps, interfaces, arbitrary slices,
-external structs, blank fields, and structs without any supported leaf field are
-not supported. Corpus values use their
+composed recursively from those types, or named interfaces, including unexported functions.
+Struct fields are flattened recursively in declaration order and reconstructed with keyed
+literals. Defined scalar types, pointers, maps, arbitrary slices, external structs, blank
+fields, structs without any supported leaf field, anonymous interfaces, `any`/`interface{}`
+(zero-method interfaces), and cycles are not supported. Corpus values use their
 exact explicit conversion, one line per flattened native value in signature order,
 for example `int64(-42)` or `bool(true)`. A corpus file is one complete
 argument tuple. `uintptr` is not a native Go fuzz type and is refused.
@@ -170,6 +170,21 @@ Requires a Go 1.24+ target toolchain. Returns are discarded; fuzz replay detects
 without inventing correctness properties or treating returned errors as failures.
 The caller must ensure determinism, no external state, and no mutation or
 retention of inputs.
+
+**Interface parameters**: When a parameter has an interface type, `benchgen` selects a
+concrete local type that implements it. The interface may be declared anywhere — in
+the target package or imported from the standard library — but the concrete
+implementation must be declared in the target package, because the generated file
+adds no imports. If exactly one local type implements the interface and can be flattened into native
+fuzz types, it is used: value receiver produces `T{...}`, pointer receiver produces
+`&T{...}`. If multiple local types implement the interface after filtering out
+non-flattenable types, generation fails with an error listing them; use `--impl
+Interface=Type` to pick one explicitly. Explicit `--impl` pairs are never ambiguous
+and override discovery. Both interface spellings are accepted: `--impl Reader=Type`
+for a local `Reader`, and `--impl io.Reader=Type` for an imported interface.
+The benchmark measures the chosen implementation, not "the interface": cost behind
+an interface call is entirely the implementation's. If the choice changes between
+two measurements, `verify` is comparing different programs and the artifact must say so.
 
 The output directory receives a record — the generated code plus a build constraint
 that excludes it from compilation — alongside the manifest. This record is safe to
@@ -180,9 +195,12 @@ build constraint prevents duplicate-symbol and orphan-package errors.
 any build constraint. That is the copy that runs when you execute the tests.
 Existing files and symbol conflicts are refused.
 
-This reporter has its own schema version **3** and no measurement object.
+This reporter has its own schema version **4** and no measurement object.
 `generated: true` with `validated: false` means generation succeeded, not that
 the seeds passed: generation never executes the target and needs no API key.
+Schema version 4 added support for interface parameters and the `implementations`
+field in the manifest, which records the chosen concrete type for each interface
+as `"Interface=Type"` strings.
 
 Replay the generated `FuzzProfadvisor_<name>` seeds before measuring
 `BenchmarkProfadvisor_<name>`. Exploration via `go test -fuzz` is a separate user

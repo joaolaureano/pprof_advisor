@@ -63,6 +63,7 @@ func TestIntegrationGeneratedHarness(t *testing.T) {
 		{"byte_rune", "func process(b byte, r rune) int32 { return int32(b) + r }", []string{"byte('K')\nrune('œ')", "uint8(255)\nint32(-1)"}},
 		{"float_special", "func process(v float64, n int) float64 { return v + float64(n) }", []string{"float64(NaN)\nint(1)", "math.Float64frombits(0x7ff8000000000001)\nint(-2)"}},
 		{"wide_struct", "type wide struct { F0 int64; F1 int64; F2 int64; F3 int64; F4 int64; F5 int64; F6 int64; F7 int64; F8 int64; F9 int64; F10 int64; F11 int64 }\nfunc process(a int64, w wide) int64 { return a + w.F0 + w.F11 }", []string{"int64(1)\nint64(10)\nint64(11)\nint64(12)\nint64(13)\nint64(14)\nint64(15)\nint64(16)\nint64(17)\nint64(18)\nint64(19)\nint64(20)\nint64(21)", "int64(2)\nint64(30)\nint64(31)\nint64(32)\nint64(33)\nint64(34)\nint64(35)\nint64(36)\nint64(37)\nint64(38)\nint64(39)\nint64(40)\nint64(41)"}},
+		{"interface_param", "type Source interface { Bytes() []byte }\ntype buffer struct { Data []byte; Offset int }\nfunc (b *buffer) Bytes() []byte { return b.Data }\nfunc process(s Source, n int) int { return len(s.Bytes()) + n }", []string{"[]byte(\"hello\")\nint(10)\nint(5)", "[]byte(\"data\")\nint(20)\nint(15)"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := integrationTarget(t, tc.source, tc.seeds...)

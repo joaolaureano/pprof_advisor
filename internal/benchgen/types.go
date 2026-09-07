@@ -6,8 +6,8 @@ import (
 	"fmt"
 )
 
-const SchemaVersion = 3
-const GeneratorVersion = "3"
+const SchemaVersion = 4
+const GeneratorVersion = "4"
 
 type Options struct {
 	Dir      string
@@ -16,6 +16,9 @@ type Options struct {
 	Corpus   string
 	Out      string
 	Write    bool
+	// Implementations are raw "Interface=Type" strings from the CLI, specifying
+	// which concrete type should be instantiated for each interface parameter.
+	Implementations []string
 }
 
 type Target struct {
@@ -27,6 +30,12 @@ type Target struct {
 	// flattened native fuzz values used to reconstruct those arguments.
 	ArgumentTypes []string `json:"argument_types"`
 	InputTypes    []string `json:"input_types"`
+	// Implementations records which concrete type was instantiated for each
+	// interface parameter, as "Interface=Type" strings. The harness measures
+	// the chosen implementation, not "the interface", so two captures that
+	// differ only in this choice are measuring different programs and the
+	// artifact must say so.
+	Implementations []string `json:"implementations"`
 	// ArgumentTemplates are generated Go expressions with $N placeholders for
 	// InputTypes. They are implementation detail, not part of the artifact.
 	ArgumentTemplates []string `json:"-"`

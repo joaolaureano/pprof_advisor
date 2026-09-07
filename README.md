@@ -83,17 +83,32 @@ One execution handles one package-level function, including unexported functions
 It must be non-generic and non-variadic. Arguments may be native Go fuzz types:
 `string`, `[]byte`, `bool`, `int`, `int8`, `int16`, `int32` (including `rune`),
 `int64`, `uint`, `uint8` (including `byte`), `uint16`, `uint32`, `uint64`,
-`float32`, or `float64`; or local structs composed recursively of those types.
+`float32`, or `float64`; or local structs composed recursively of those types,
+or named interfaces declared anywhere (standard library or local).
 Struct fields are flattened into native fuzz inputs and rebuilt with keyed
-composite literals before each target call. `uintptr`, pointers, maps, interfaces,
-arbitrary slices, external structs, blank fields, empty-only structs, and defined
-scalar types are not accepted.
+composite literals before each target call. For interface parameters, the concrete
+implementation must be declared locally; the interface is used to discover which
+local types implement it. `uintptr`, pointers, maps, arbitrary slices, external
+structs, blank fields, empty-only structs, defined scalar types, anonymous interfaces,
+`any`/`interface{}`, and cycles are not accepted.
 Return values, including errors, are discarded. Methods and custom setup are
 unsupported, as are packages using cgo. The target must use a Go 1.24+ toolchain
 for `b.Loop()`.
 The function must be deterministic, independent of external state, and must
 neither modify nor retain its arguments. These are caller obligations; generation
 cannot prove them.
+
+When a parameter is an interface, `benchgen` automatically selects a concrete local
+type that implements it. If exactly one such type exists and can be flattened into
+native fuzz types, that type is instantiated: with a value receiver as `T{...}` or
+with a pointer receiver as `&T{...}`. If multiple candidates remain after filtering
+out non-flattenable types, generation fails and lists them; use `--impl Interface=Type`
+(repeatable) to select one explicitly. Both interface spellings work: `--impl Reader=Type`
+for a local `Reader`, and `--impl io.Reader=Type` for an imported interface.
+The benchmark measures the chosen implementation, not "the interface": the cost
+behind an interface call is entirely the implementation's cost. A change in which
+type is chosen between two measurements means `verify` is comparing different
+programs.
 
 The generated `FuzzProfadvisor_parse` embeds each unique tuple with `f.Add`.
 It detects panics; it defines no additional correctness property. The generated
@@ -111,8 +126,12 @@ constraint prevents duplicate-symbol and orphan-package errors.
 any build constraint. That is the copy that runs when you execute
 `go test ./internal/parser`. Existing files and conflicting symbols are refused.
 
-The JSON report and manifest use their own `schema_version: 3`; `argument_types`
+The JSON report and manifest use their own `schema_version: 4`; `argument_types`
 records the target signature and `input_types` records the flattened fuzz values.
+Version 4 added support for interface parameters and includes an `implementations`
+field listing which concrete type was instantiated for each interface parameter,
+as `"Interface=Type"` strings. This is critical information: the benchmark measures
+that specific type, not "the interface".
 The report says
 `generated: true` and `validated: false` because the target has not been executed.
 Use `--format text` for a readable report. Diagnostics use stderr and exits are
