@@ -26,6 +26,7 @@
   "24": "doc.go",
   "25": "example.com/escapecorpus",
   "26": "Resolve",
-  "27": "Text",
-  "28": "resolveTarget"
+  "27": "buildUserPrompt",
+  "28": "resolveTarget",
+  "29": "Load"
 }
