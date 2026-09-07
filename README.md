@@ -248,17 +248,6 @@ compared across runs.
 go test ./...
 ```
 
-The suite is self-contained. `testdata/fixture/` is a throwaway module with a
-deliberately slow path matcher, and the committed profiles and benchmark output
-were recorded from its benchmarks. The end-to-end tests run against that module
-and against a temporary git repository the test creates, so nothing outside this
-checkout is needed.
-
-`testdata/escape/` works the same way for the escape parser. The parser tests run
-against a recording and need no toolchain; one further test runs the real
-compiler and compares. After a Go upgrade, that comparison is what tells you the
-wording moved — re-record with `go test ./internal/escape -update` and read the
-diff.
-
-The prompt catalog is pinned the same way: `go test ./internal/prompt -update`
-regenerates `testdata/prompts/`, and the diff is the review.
+The suite is self-contained: it runs against a throwaway module and a temporary
+git repository the tests create, so nothing outside this checkout is needed and
+no network access is involved.
