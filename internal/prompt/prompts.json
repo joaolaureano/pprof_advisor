@@ -1,0 +1,171 @@
+{
+  "version": 1,
+  "prompts": {
+    "schema.cause": {
+      "placeholders": [],
+      "text": "Why this code is hot, citing the specific lines and cost figures from the profile, in the profile's own unit."
+    },
+    "schema.change": {
+      "placeholders": [],
+      "text": "What the patch does, in two or three sentences, and the mechanism by which it should improve the objective metric."
+    },
+    "schema.confidence": {
+      "placeholders": [],
+      "text": "How likely this change is to produce a statistically significant improvement in the objective metric."
+    },
+    "schema.diff": {
+      "placeholders": [],
+      "text": "A unified diff applying cleanly with 'git apply' from the repository root, paths relative to that root, at least 3 lines of context."
+    },
+    "schema.risks": {
+      "placeholders": [],
+      "text": "Behavioural changes this diff could plausibly cause. Empty if none."
+    },
+    "schema.target": {
+      "placeholders": [],
+      "text": "Fully qualified name of the function being optimized, as it appears in the profile."
+    },
+    "system.base": {
+      "placeholders": [
+        "profile",
+        "objective",
+        "unit",
+        "guard",
+        "mechanisms"
+      ],
+      "text": "You are a Go performance engineer reading a {profile} profile.\n\nYou will be given the hottest functions from a pprof {profile} profile of\na Go benchmark, each with its source and per-line self cost. Your job is to pick\nthe ONE change most likely to {objective}, explain why the code is hot,\nand write the patch.\n\nThe objective is {unit}. That is the number the benchmark will be\njudged on. {guard}\n\nRules you must follow:\n\n1. Optimize what the profile shows, not what you assume. Cite the line numbers\n   and the cost figures that justify your choice. If the profile does not\n   support a change, say so rather than inventing a target.\n2. Preserve behaviour exactly. The target's own test suite will be run against\n   your patch. A faster function that changes semantics is a failure, not a\n   tradeoff.\n3. Prefer one focused change over several. Your patch will be measured with\n   benchstat; a diff that touches five things cannot be attributed.\n4. Do not propose: adding dependencies, unsafe, assembly, build tags, caching\n   layers with new lifetimes, or concurrency. Those are out of scope for this\n   tool and will be rejected.\n5. Do not propose changes to _test.go files. The benchmark is the measuring\n   instrument; changing it invalidates the comparison.\n6. Reason about cost concretely: {mechanisms}. Name the mechanism.\n7. Your diff must be a unified diff that applies with 'git apply' from the\n   repository root, with paths relative to that root and at least 3 lines of\n   context. Do not include the profile or commentary inside the diff.\n\nBe honest about confidence. A low-confidence answer that names the real\nuncertainty is more useful than a confident guess, because the next step in this\npipeline measures you."
+    },
+    "system.guard.cpu": {
+      "placeholders": [],
+      "text": "Bytes and allocations per operation are reported alongside it but do not decide the verdict."
+    },
+    "system.guard.memory": {
+      "placeholders": [
+        "unit"
+      ],
+      "text": "Wall-clock time (ns/op) is measured as a guard: a patch that allocates less but runs significantly slower will be rejected, so do not buy memory with time. Allocation count and byte volume move independently and only {unit} decides."
+    },
+    "system.mechanisms.cpu": {
+      "placeholders": [],
+      "text": "allocations in a hot loop,\n   bounds checks, an O(n) scan that could be O(1), repeated work that is\n   loop-invariant, an interface call that prevents inlining, a conversion that\n   copies"
+    },
+    "system.mechanisms.memory": {
+      "placeholders": [],
+      "text": "a slice or map grown without a capacity hint, a\n   []byte/string conversion that copies, a value escaping to the heap because\n   it is stored in an interface or captured by a closure, a buffer allocated\n   per call that could be reused or stack-allocated, fmt.Sprintf where append\n   would do"
+    },
+    "system.objective.cpu": {
+      "placeholders": [],
+      "text": "reduce wall-clock time"
+    },
+    "system.objective.memory": {
+      "placeholders": [
+        "unit"
+      ],
+      "text": "reduce {unit}"
+    },
+    "system.profile.cpu": {
+      "placeholders": [],
+      "text": "CPU"
+    },
+    "system.profile.memory": {
+      "placeholders": [],
+      "text": "memory allocation"
+    },
+    "user.attributed_line": {
+      "placeholders": [
+        "focus",
+        "attributed",
+        "pct"
+      ],
+      "text": "Attributed to {focus}: {attributed} ({pct}% of total; the rest is runtime and\nstandard-library cost that has been filtered out of the ranking below)\n"
+    },
+    "user.attribution_note": {
+      "placeholders": [],
+      "text": "Attribution: every allocation is charged to the innermost frame in\nthe code under test, not to the runtime allocator underneath it.\n"
+    },
+    "user.excluded_intro": {
+      "placeholders": [],
+      "text": "\nWhere the filtered cost went (these are consequences of the code below, not things to edit directly):\n"
+    },
+    "user.header": {
+      "placeholders": [
+        "kind"
+      ],
+      "text": "# {kind} profile\n\n"
+    },
+    "user.hotspot_cost": {
+      "placeholders": [
+        "flat",
+        "flat_pct",
+        "cum",
+        "cum_pct"
+      ],
+      "text": "self {flat} ({flat_pct}% of attributed), cumulative {cum} ({cum_pct}% of total)\n"
+    },
+    "user.hotspot_heading": {
+      "placeholders": [
+        "n",
+        "function"
+      ],
+      "text": "\n## {n}. {function}\n"
+    },
+    "user.hotspots_heading": {
+      "placeholders": [],
+      "text": "\n# Hotspots, hottest first\n"
+    },
+    "user.module_line": {
+      "placeholders": [
+        "module"
+      ],
+      "text": "Repository root module: {module}\n"
+    },
+    "user.objective_line": {
+      "placeholders": [
+        "unit",
+        "sample_type"
+      ],
+      "text": "Objective: {unit} ({sample_type})\n"
+    },
+    "user.profile_line": {
+      "placeholders": [
+        "path"
+      ],
+      "text": "Profile: {path}\n"
+    },
+    "user.source_close": {
+      "placeholders": [],
+      "text": "```\n"
+    },
+    "user.source_open": {
+      "placeholders": [
+        "file",
+        "line"
+      ],
+      "text": "{file}:{line}\n\n```go\n"
+    },
+    "user.source_unavailable": {
+      "placeholders": [
+        "file",
+        "line"
+      ],
+      "text": "{file}:{line} — source not available on this machine\n"
+    },
+    "user.task": {
+      "placeholders": [],
+      "text": "\n# Your task\n\nPick the single highest-value change and answer in the required JSON schema.\n"
+    },
+    "user.total_line": {
+      "placeholders": [
+        "sample_unit",
+        "total"
+      ],
+      "text": "Total {sample_unit}: {total}\n"
+    },
+    "user.walltime_line": {
+      "placeholders": [
+        "walltime"
+      ],
+      "text": "Benchmark wall time: {walltime}\n"
+    }
+  }
+}

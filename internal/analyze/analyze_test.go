@@ -7,43 +7,26 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/joaolaureano/profadvisor/internal/extract"
 	"github.com/joaolaureano/profadvisor/internal/fixture"
+	"github.com/joaolaureano/profadvisor/internal/llm"
 	"github.com/joaolaureano/profadvisor/internal/schema"
 )
 
 // fakeClient records the request and returns a canned response, so the prompt
-// and the parsing can be tested without an API key or a network call.
+// and the request shape can be tested without an API key or a network call.
 type fakeClient struct {
-	got   anthropic.MessageNewParams
+	got   llm.Request
 	reply string
 	err   error
 }
 
-func (f *fakeClient) NewMessage(_ context.Context, p anthropic.MessageNewParams) (*anthropic.Message, error) {
-	f.got = p
+func (f *fakeClient) Complete(_ context.Context, r llm.Request) (*llm.Response, error) {
+	f.got = r
 	if f.err != nil {
 		return nil, f.err
 	}
-	// Built by decoding an API-shaped payload rather than by filling the
-	// struct in: ContentBlockUnion.AsAny re-unmarshals from the raw JSON it
-	// was decoded from, so a hand-assembled Message would silently present
-	// as having no content — exactly the bug this fake exists to catch.
-	payload, err := json.Marshal(map[string]any{
-		"id": "msg_test", "type": "message", "role": "assistant",
-		"model": "claude-opus-5", "stop_reason": "end_turn",
-		"content": []any{map[string]any{"type": "text", "text": f.reply}},
-		"usage":   map[string]any{"input_tokens": 1, "output_tokens": 1},
-	})
-	if err != nil {
-		return nil, err
-	}
-	var msg anthropic.Message
-	if err := json.Unmarshal(payload, &msg); err != nil {
-		return nil, err
-	}
-	return &msg, nil
+	return &llm.Response{Text: f.reply, StopReason: "end_turn"}, nil
 }
 
 func realExtract(t *testing.T) *schema.ExtractResult {
@@ -68,12 +51,7 @@ func TestPromptCarriesTheProfileEvidence(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	var prompt string
-	for _, blk := range f.got.Messages[0].Content {
-		if blk.OfText != nil {
-			prompt += blk.OfText.Text
-		}
-	}
+	prompt := f.got.User
 
 	// The whole reason extract filters runtime frames is so the model reasons
 	// about the code under test. If the prompt lost the numbers or the source,
@@ -108,20 +86,20 @@ func TestPromptCarriesTheProfileEvidence(t *testing.T) {
 func TestRequestShape(t *testing.T) {
 	r := realExtract(t)
 	f := &fakeClient{reply: goodReply}
-	if _, err := Run(context.Background(), f, r, Options{}); err != nil {
+	if _, err := Run(context.Background(), f, r, Options{Model: "test-model"}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if got := string(f.got.Model); got != DefaultModel {
-		t.Errorf("model = %q, want %q", got, DefaultModel)
+	if f.got.Model != "test-model" {
+		t.Errorf("model = %q, want %q", f.got.Model, "test-model")
 	}
-	if f.got.Thinking.OfAdaptive == nil {
-		t.Error("adaptive thinking was not requested")
+	if !f.got.Thinking {
+		t.Error("extended reasoning was not requested")
 	}
-	if f.got.OutputConfig.Format.Schema == nil {
+	if f.got.JSONSchema == nil {
 		t.Error("no output schema was sent; the response shape would be unconstrained")
 	}
-	if len(f.got.System) == 0 || f.got.System[0].CacheControl.Type == "" {
-		t.Error("system prompt is not cached; it is identical across calls in a run")
+	if f.got.System == "" {
+		t.Error("no system prompt was sent")
 	}
 }
 

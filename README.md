@@ -1,7 +1,7 @@
 # profadvisor
 
-Finds a hot-path in **any** Go package that has benchmarks, asks Claude how to
-fix it, and then measures whether the fix actually worked. It optimizes CPU time
+Finds a hot-path in **any** Go package that has benchmarks, asks a language model
+how to fix it, and then measures whether the fix actually worked. It optimizes CPU time
 or memory allocation, chosen per run.
 
 profadvisor is a standalone tool. It has no target of its own and knows nothing
@@ -16,7 +16,7 @@ go build -o profadvisor .
 ```
 
 Requires a Go toolchain on PATH (the target's benchmarks have to compile) and,
-for the `analyze` step only, `ANTHROPIC_API_KEY`.
+for the `analyze` step only, an API key for a model provider.
 
 ## Use
 
@@ -24,7 +24,7 @@ Point it at the repository you want to make faster. `--dir` is that
 repository's root and `--pkg` is a package pattern interpreted inside it:
 
 ```
-export ANTHROPIC_API_KEY=...
+export PROFADVISOR_API_KEY=...
 
 ./profadvisor run --dir /path/to/your/repo --pkg ./internal/parser/ --bench . --count 10
 
@@ -39,6 +39,38 @@ measurement says so; the model's confidence is not evidence.
 
 See [AGENTS.md](AGENTS.md) for the full command reference and the I/O contract.
 That file is what both humans and agents should read first.
+
+## Providers
+
+The tool has no built-in vendor. `internal/analyze` builds a request in neutral
+types and one adapter under `internal/llm/` speaks the wire format:
+
+```
+--provider anthropic     # default
+--provider openai
+--base-url http://localhost:8080   # any endpoint speaking that provider's format
+--model <id>             # default: whatever the provider picks
+```
+
+Each can also come from the environment: `PROFADVISOR_PROVIDER`,
+`PROFADVISOR_MODEL`, `PROFADVISOR_BASE_URL`, `PROFADVISOR_API_KEY`. The key falls
+back to the provider's own conventional variable if the neutral one is unset.
+
+Adding a provider is one file: implement `llm.Client`, call `llm.Register` from
+`init()`, and blank-import it in `internal/llm/providers`.
+
+## Prompts
+
+Every word the tool sends lives in `internal/prompt/prompts.json`, embedded at
+build time. Entries carry their text and the placeholders it declares, and the
+two are checked against each other at load, so a mistyped `{unit}` fails at
+startup rather than reaching a model after a benchmark has already been paid
+for.
+
+To try different wording without rebuilding, copy the file, edit it, and pass
+`--prompts <file>`. The exact bytes sent for each objective are pinned by
+golden files under `testdata/prompts/`; `go test ./internal/analyze -update`
+regenerates them, and the diff is the review.
 
 ## Scope
 
@@ -58,7 +90,9 @@ a patch that saves bytes by spending time is rejected rather than celebrated.
 | `internal/benchmark/` | One `go test -bench` invocation. Process handling only. |
 | `internal/capture/` | Keeps the profile and `bench.txt` from one run. |
 | `internal/extract/` | Ranks hot functions, filters runtime noise, attaches source. |
-| `internal/analyze/` | Builds the prompt and calls the Anthropic API. |
+| `internal/analyze/` | Builds the request and reads the answer. Names no vendor. |
+| `internal/prompt/` | Every prompt the tool sends, as one validated JSON catalog. |
+| `internal/llm/` | Neutral model client; one adapter subpackage per provider. |
 | `internal/apply/` | Applies the diff on a branch. Refuses a dirty tree; rolls back. |
 | `internal/verify/` | benchfmt + benchmath. Returns MELHOROU / SEM DIFERENÇA / PIOROU. |
 | `internal/pipeline/` | Runs the five in order and decides what the result means. |

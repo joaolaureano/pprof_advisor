@@ -12,13 +12,14 @@ import (
 
 func newAnalyzeCmd() *cobra.Command {
 	var opts analyze.Options
+	var mo modelOptions
 	c := &cobra.Command{
 		Use:   "analyze <extract.json>",
-		Short: "Ask Claude what to do about the hot path",
+		Short: "Ask a model what to do about the hot path",
 		Long: "Reads the output of `extract` and returns a diagnosis and a unified " +
 			"diff.\n\nThe answer is a proposal, not a conclusion: nothing here has " +
 			"been measured. Run `apply` and then `verify` before believing it.\n\n" +
-			"Requires ANTHROPIC_API_KEY, or credentials from `ant auth login`.",
+			credentialsHelp(),
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			raw, err := os.ReadFile(args[0])
@@ -33,7 +34,12 @@ func newAnalyzeCmd() *cobra.Command {
 				return fmt.Errorf("%s has schema version %d, this build speaks %d",
 					args[0], in.SchemaVersion, schema.Version)
 			}
-			res, err := analyze.Run(cmd.Context(), analyze.NewClient(), &in, opts)
+			client, cat, err := mo.client()
+			if err != nil {
+				return err
+			}
+			opts.Provider, opts.Model, opts.Prompts = mo.Provider, mo.Model, cat
+			res, err := analyze.Run(cmd.Context(), client, &in, opts)
 			if err != nil {
 				return err
 			}
@@ -41,8 +47,8 @@ func newAnalyzeCmd() *cobra.Command {
 		},
 	}
 	f := c.Flags()
-	f.StringVar(&opts.Model, "model", analyze.DefaultModel, "model id")
 	f.StringVar(&opts.Module, "module", "", "target repository module path, for diff paths")
 	f.Int64Var(&opts.MaxTokens, "max-tokens", 16000, "response cap")
+	modelFlags(c, &mo)
 	return c
 }

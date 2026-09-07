@@ -3,7 +3,6 @@ package cmd
 import (
 	"time"
 
-	"github.com/joaolaureano/profadvisor/internal/analyze"
 	"github.com/joaolaureano/profadvisor/internal/pipeline"
 	"github.com/joaolaureano/profadvisor/internal/schema"
 	"github.com/spf13/cobra"
@@ -11,6 +10,7 @@ import (
 
 func newRunCmd() *cobra.Command {
 	var opts pipeline.Options
+	var mo modelOptions
 	c := &cobra.Command{
 		Use:   "run --pkg <pattern> --dir <repo>",
 		Short: "Capture, diagnose, apply, re-measure, and judge",
@@ -27,8 +27,13 @@ func newRunCmd() *cobra.Command {
 			"things slower.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			client, cat, err := mo.client()
+			if err != nil {
+				return err
+			}
+			opts.Analyze.Provider, opts.Analyze.Model, opts.Analyze.Prompts = mo.Provider, mo.Model, cat
 			opts.Progress = cmd.ErrOrStderr()
-			res, runErr := pipeline.Run(cmd.Context(), analyze.NewClient(), opts)
+			res, runErr := pipeline.Run(cmd.Context(), client, opts)
 			// Emitted even on failure: the partial record names which step
 			// broke and holds everything captured up to that point.
 			if err := emit(cmd, res); err != nil {
@@ -52,10 +57,10 @@ func newRunCmd() *cobra.Command {
 	f.StringVar(&opts.Capture.OutDir, "out", "profadvisor-out", "root for captured artifacts")
 	f.DurationVar(&opts.Capture.Timeout, "timeout", 20*time.Minute, "per-capture timeout")
 	f.IntVar(&opts.Extract.TopN, "top", 10, "hotspots to send to the model")
-	f.StringVar(&opts.Analyze.Model, "model", analyze.DefaultModel, "model id")
 	f.StringVar(&opts.Analyze.Module, "module", "", "target module path, for diff paths")
 	f.Float64Var(&opts.Verify.Alpha, "alpha", 0.05, "significance level")
 	measurementFlags(c, &opts.Profile, &opts.Unit)
+	modelFlags(c, &mo)
 	_ = c.MarkFlagRequired("pkg")
 	return c
 }

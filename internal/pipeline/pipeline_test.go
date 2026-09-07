@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/joaolaureano/profadvisor/internal/apply"
 	"github.com/joaolaureano/profadvisor/internal/capture"
 	"github.com/joaolaureano/profadvisor/internal/extract"
+	"github.com/joaolaureano/profadvisor/internal/llm"
 	"github.com/joaolaureano/profadvisor/internal/schema"
 )
 
@@ -92,23 +92,13 @@ index a2617dc..8ef82a0 100644
 // real against a real git repository and a real Go toolchain.
 type stubClient struct{ diff string }
 
-func (s stubClient) NewMessage(context.Context, anthropic.MessageNewParams) (*anthropic.Message, error) {
+func (s stubClient) Complete(context.Context, llm.Request) (*llm.Response, error) {
 	body, _ := json.Marshal(map[string]any{
 		"target": "slowpkg.Lookup", "cause": "linear scan over 512 entries",
 		"change": "index the table in a map", "diff": s.diff,
 		"confidence": "high", "risks": []string{},
 	})
-	payload, _ := json.Marshal(map[string]any{
-		"id": "msg_stub", "type": "message", "role": "assistant",
-		"model": "stub", "stop_reason": "end_turn",
-		"content": []any{map[string]any{"type": "text", "text": string(body)}},
-		"usage":   map[string]any{"input_tokens": 1, "output_tokens": 1},
-	})
-	var msg anthropic.Message
-	if err := json.Unmarshal(payload, &msg); err != nil {
-		return nil, err
-	}
-	return &msg, nil
+	return &llm.Response{Text: string(body), StopReason: "end_turn"}, nil
 }
 
 func seedRepo(t *testing.T) string {

@@ -19,7 +19,7 @@ import "github.com/joaolaureano/profadvisor/internal/measurement"
 // time. Once a run can optimize bytes per operation those names are lies, so
 // the costs became unit-less numbers and each document now carries the
 // measurement.Config that says how to read them.
-const Version = 2
+const Version = 3
 
 // ---------------------------------------------------------------------------
 // extract
@@ -114,8 +114,12 @@ type SourceExcerpt struct {
 
 // Diagnosis is what `profadvisor analyze` writes to stdout.
 type Diagnosis struct {
-	SchemaVersion int    `json:"schema_version"`
-	Model         string `json:"model"`
+	SchemaVersion int `json:"schema_version"`
+	// Provider and Model together identify what produced this diff. Once the
+	// provider is pluggable a bare model id is ambiguous, and reproducing a
+	// result is the only reason to record either.
+	Provider string `json:"provider,omitempty"`
+	Model    string `json:"model"`
 	// Measurement is carried through from the profile so `apply` and `verify`
 	// judge the suggestion against the objective it was asked for.
 	Measurement measurement.Config `json:"measurement"`

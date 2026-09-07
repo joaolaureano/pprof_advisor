@@ -1,9 +1,13 @@
 // Package analyze turns extract output into a diagnosis and a concrete patch by
-// asking Claude.
+// asking a language model.
 //
 // The package owns the request shape but not the judgement: it does not decide
 // whether a suggestion is good. That is what `verify` is for, and treating the
 // model's confidence as evidence would defeat the point of the pipeline.
+//
+// Nothing here names a vendor. The request is built in the neutral types of
+// internal/llm and the wording comes from internal/prompt, so swapping the
+// provider is a flag rather than an edit.
 package analyze
 
 import (
@@ -13,97 +17,84 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/joaolaureano/profadvisor/internal/llm"
 	"github.com/joaolaureano/profadvisor/internal/measurement"
+	"github.com/joaolaureano/profadvisor/internal/prompt"
 	"github.com/joaolaureano/profadvisor/internal/schema"
 )
 
-// DefaultModel is the model used unless overridden. Performance analysis is
-// exactly the kind of work where the strongest model earns its cost: the output
-// is a patch that a benchmark will accept or reject, so a weak suggestion is not
-// cheap, it is a wasted capture-apply-verify cycle.
-const DefaultModel = "claude-opus-5"
-
 // Options configures a single analysis request.
 type Options struct {
-	// Model overrides DefaultModel.
+	// Model overrides the provider's default model.
 	Model string
+	// Provider names the model provider, recorded on the diagnosis so a diff
+	// can be traced back to what produced it. Informational here; the caller
+	// has already constructed the Client.
+	Provider string
 	// Module is the target repository's module path, included in the prompt so
 	// the model writes diff paths relative to the right root. Optional.
 	Module string
 	// MaxTokens bounds the response. Zero means 16000.
 	MaxTokens int64
-	// Effort maps to output_config.effort. Empty means "xhigh", which is the
+	// Effort is the reasoning-effort hint. Empty means "xhigh", which is the
 	// right default for this workload: the answer is a patch, and a shallow
-	// answer costs a whole benchmark cycle to discover.
-	Effort anthropic.OutputConfigEffort
+	// answer costs a whole benchmark cycle to discover. A provider without an
+	// equivalent knob ignores it.
+	Effort string
+	// Prompts overrides the built-in prompt catalog. Nil loads the embedded one.
+	Prompts *prompt.Catalog
 }
 
-// Client is the subset of the SDK this package uses, so tests can substitute a
-// canned response without a network call or an API key.
-type Client interface {
-	NewMessage(ctx context.Context, params anthropic.MessageNewParams) (*anthropic.Message, error)
-}
-
-type sdkClient struct{ c anthropic.Client }
-
-func (s sdkClient) NewMessage(ctx context.Context, params anthropic.MessageNewParams) (*anthropic.Message, error) {
-	// Streaming, not a plain create: max_tokens is large enough that a
-	// non-streaming request can outlive the HTTP timeout on a slow answer.
-	stream := s.c.Messages.NewStreaming(ctx, params)
-	var msg anthropic.Message
-	for stream.Next() {
-		if err := msg.Accumulate(stream.Current()); err != nil {
-			return nil, fmt.Errorf("accumulating stream: %w", err)
-		}
-	}
-	if err := stream.Err(); err != nil {
-		return nil, err
-	}
-	return &msg, nil
-}
-
-// NewClient returns a Client backed by the Anthropic SDK. Credentials are
-// resolved by the SDK (ANTHROPIC_API_KEY, or an `ant auth login` profile).
-func NewClient() Client {
-	return sdkClient{c: anthropic.NewClient()}
-}
+// Client is the model client this package needs. It is an alias rather than a
+// second declaration so a caller can pass any llm.Client straight through.
+type Client = llm.Client
 
 // responseSchema is the JSON schema the model's answer is constrained to.
 // Constraining the shape is what lets `analyze | apply` be a pipe rather than a
-// parser with a prayer in it.
-var responseSchema = map[string]any{
-	"type":                 "object",
-	"additionalProperties": false,
-	"required":             []string{"target", "cause", "change", "diff", "confidence", "risks"},
-	"properties": map[string]any{
-		"target": map[string]any{
-			"type":        "string",
-			"description": "Fully qualified name of the function being optimized, as it appears in the profile.",
-		},
-		"cause": map[string]any{
-			"type":        "string",
-			"description": "Why this code is hot, citing the specific lines and cost figures from the profile, in the profile's own unit.",
-		},
-		"change": map[string]any{
-			"type":        "string",
-			"description": "What the patch does, in two or three sentences, and the mechanism by which it should improve the objective metric.",
-		},
-		"diff": map[string]any{
-			"type":        "string",
-			"description": "A unified diff applying cleanly with 'git apply' from the repository root, paths relative to that root, at least 3 lines of context.",
-		},
-		"confidence": map[string]any{
-			"type":        "string",
-			"enum":        []string{"high", "medium", "low"},
-			"description": "How likely this change is to produce a statistically significant improvement in the objective metric.",
-		},
-		"risks": map[string]any{
-			"type":        "array",
-			"items":       map[string]any{"type": "string"},
-			"description": "Behavioural changes this diff could plausibly cause. Empty if none.",
-		},
-	},
+// parser with a prayer in it. The field descriptions live in the prompt catalog
+// with the rest of the wording.
+func responseSchema(cat *prompt.Catalog) (map[string]any, error) {
+	str := func(key string) (map[string]any, error) {
+		d, err := cat.Render(key, map[string]string{})
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"type": "string", "description": d}, nil
+	}
+	props := map[string]any{}
+	for field, key := range map[string]string{
+		"target": "schema.target", "cause": "schema.cause",
+		"change": "schema.change", "diff": "schema.diff",
+	} {
+		p, err := str(key)
+		if err != nil {
+			return nil, err
+		}
+		props[field] = p
+	}
+	conf, err := str("schema.confidence")
+	if err != nil {
+		return nil, err
+	}
+	conf["enum"] = []string{"high", "medium", "low"}
+	props["confidence"] = conf
+
+	risks, err := cat.Render("schema.risks", map[string]string{})
+	if err != nil {
+		return nil, err
+	}
+	props["risks"] = map[string]any{
+		"type":        "array",
+		"items":       map[string]any{"type": "string"},
+		"description": risks,
+	}
+
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []string{"target", "cause", "change", "diff", "confidence", "risks"},
+		"properties":           props,
+	}, nil
 }
 
 // Run asks the model for one optimization proposal.
@@ -126,58 +117,57 @@ func Run(ctx context.Context, c Client, r *schema.ExtractResult, opts Options) (
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("analyze: %w", err)
 	}
-	model := opts.Model
-	if model == "" {
-		model = DefaultModel
+
+	cat := opts.Prompts
+	if cat == nil {
+		loaded, err := prompt.Load()
+		if err != nil {
+			return nil, fmt.Errorf("analyze: %w", err)
+		}
+		cat = loaded
 	}
+
+	system, err := systemPrompt(cat, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("analyze: system prompt: %w", err)
+	}
+	user, err := buildUserPrompt(cat, r, opts.Module)
+	if err != nil {
+		return nil, fmt.Errorf("analyze: user prompt: %w", err)
+	}
+	outSchema, err := responseSchema(cat)
+	if err != nil {
+		return nil, fmt.Errorf("analyze: response schema: %w", err)
+	}
+
 	maxTokens := opts.MaxTokens
 	if maxTokens == 0 {
 		maxTokens = 16000
 	}
 	effort := opts.Effort
 	if effort == "" {
-		effort = anthropic.OutputConfigEffortXhigh
+		effort = "xhigh"
 	}
 
-	adaptive := anthropic.ThinkingConfigAdaptiveParam{}
-	params := anthropic.MessageNewParams{
-		Model:     anthropic.Model(model),
-		MaxTokens: maxTokens,
-		System: []anthropic.TextBlockParam{{
-			Text: systemPrompt(cfg),
-			// The system prompt and schema are byte-identical across every
-			// hotspot in a run, so caching them is free savings on the
-			// second and later calls.
-			CacheControl: anthropic.NewCacheControlEphemeralParam(),
-		}},
-		Thinking: anthropic.ThinkingConfigParamUnion{OfAdaptive: &adaptive},
-		OutputConfig: anthropic.OutputConfigParam{
-			Effort: effort,
-			Format: anthropic.JSONOutputFormatParam{Schema: responseSchema},
-		},
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock(buildUserPrompt(r, opts.Module))),
-		},
-	}
-
-	msg, err := c.NewMessage(ctx, params)
+	resp, err := c.Complete(ctx, llm.Request{
+		Model:      opts.Model,
+		System:     system,
+		User:       user,
+		MaxTokens:  maxTokens,
+		JSONSchema: outSchema,
+		Effort:     effort,
+		Thinking:   true,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("analyze: %w", err)
 	}
-	if msg.StopReason == anthropic.StopReasonRefusal {
-		return nil, fmt.Errorf("analyze: model declined (%s): %s",
-			msg.StopDetails.Category, msg.StopDetails.Explanation)
+	if resp.Refusal != "" {
+		return nil, fmt.Errorf("analyze: model declined: %s", resp.Refusal)
 	}
 
-	var text strings.Builder
-	for _, block := range msg.Content {
-		if t, ok := block.AsAny().(anthropic.TextBlock); ok {
-			text.WriteString(t.Text)
-		}
-	}
-	raw := strings.TrimSpace(text.String())
+	raw := strings.TrimSpace(resp.Text)
 	if raw == "" {
-		return nil, fmt.Errorf("analyze: model returned no text (stop_reason %q)", msg.StopReason)
+		return nil, fmt.Errorf("analyze: model returned no text (stop_reason %q)", resp.StopReason)
 	}
 
 	var out struct {
@@ -197,7 +187,8 @@ func Run(ctx context.Context, c Client, r *schema.ExtractResult, opts Options) (
 
 	return &schema.Diagnosis{
 		SchemaVersion: schema.Version,
-		Model:         model,
+		Provider:      opts.Provider,
+		Model:         opts.Model,
 		Measurement:   cfg,
 		Target:        out.Target,
 		Cause:         out.Cause,

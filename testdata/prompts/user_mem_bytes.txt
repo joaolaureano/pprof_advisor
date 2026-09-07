@@ -1,0 +1,94 @@
+# Memory profile
+
+Profile: all.prof
+Objective: B/op (alloc_space)
+Benchmark wall time: 10.70s
+Total bytes: 9.10 GB
+Attributed to example.com/profadvisor/fixture: 6.17 GB (67.9% of total; the rest is runtime and
+standard-library cost that has been filtered out of the ranking below)
+Attribution: every allocation is charged to the innermost frame in
+the code under test, not to the runtime allocator underneath it.
+Repository root module: example.com/profadvisor/fixture
+
+Where the filtered cost went (these are consequences of the code below, not things to edit directly):
+  runtime.systemstack                 13.0% cumulative,   0.0% self
+  runtime.kevent                       9.1% cumulative,   9.1% self
+  runtime.netpoll                      9.1% cumulative,   0.0% self
+  runtime.startTheWorldWithSema        9.1% cumulative,   0.0% self
+  runtime.gcStart.func4                9.0% cumulative,   0.0% self
+
+# Hotspots, hottest first
+
+## 1. example.com/profadvisor/fixture/matcher.segment
+self 4.00 GB (64.7% of attributed), cumulative 4.23 GB (46.5% of total)
+/Users/joaolaureano/Coding/pprof_advisor/testdata/fixture/matcher/matcher.go:68
+
+```go
+    68 | 		}
+    69 | 	}
+    70 | 	return true
+    71 | }
+    72 | 
+    73 | // segment splits off the first '/'-delimited element of s.
+    74 | func segment(s string) (head, rest string) {
+    75 | 	s = strings.TrimPrefix(s, "/")                                        // 457.8 MB self
+    76 | 	for i := 0; i < len(s); i++ {                                         // 2.75 GB self
+    77 | 		if s[i] == '/' {                                                     // 753.4 MB self
+    78 | 			return s[:i], s[i:]                                                 // 66.8 MB self
+    79 | 		}
+    80 | 	}
+    81 | 	return s, ""
+    82 | }
+```
+
+## 2. example.com/profadvisor/fixture/matcher.matches
+self 1.44 GB (23.4% of attributed), cumulative 6.56 GB (72.1% of total)
+/Users/joaolaureano/Coding/pprof_advisor/testdata/fixture/matcher/matcher.go:52
+
+```go
+    52 | 	return nil
+    53 | }
+    54 | 
+    55 | func matches(pattern, path string) bool {                              // 190.7 MB self
+    56 | 	for pattern != "" || path != "" {                                     // 333.8 MB self
+    57 | 		var patternSegment, pathSegment string
+    58 | 		patternSegment, pattern = segment(pattern)                           // 104.9 MB self
+    59 | 		pathSegment, path = segment(path)
+    60 | 		if pathSegment == "" || patternSegment == "" {                       // 495.9 MB self
+    61 | 			return false
+    62 | 		}
+    63 | 		if strings.HasPrefix(patternSegment, ":") {
+    64 | 			continue
+    65 | 		}
+    66 | 		if patternSegment != pathSegment {                                   // 76.3 MB self
+    67 | 			return false                                                        // 257.5 MB self
+    68 | 		}
+```
+
+## 3. example.com/profadvisor/fixture/matcher.(*Table).Match
+self 505.4 MB (8.0% of attributed), cumulative 5.71 GB (62.7% of total)
+/Users/joaolaureano/Coding/pprof_advisor/testdata/fixture/matcher/matcher.go:18
+
+```go
+    18 | 
+    19 | // New returns a table over patterns, in the order they are given.
+    20 | func New(patterns []string) *Table {
+    21 | 	return &Table{patterns: append([]string(nil), patterns...)}
+    22 | }
+    23 | 
+    24 | // Match reports whether path matches any pattern.
+    25 | func (t *Table) Match(path string) bool {
+    26 | 	for _, pattern := range t.patterns {                                  // 333.8 MB self
+    27 | 		if matches(pattern, path) {                                          // 171.7 MB self
+    28 | 			return true
+    29 | 		}
+    30 | 	}
+    31 | 	return false
+    32 | }
+    33 | 
+    34 | // Params returns the captured segments of the first matching pattern, or nil.
+```
+
+# Your task
+
+Pick the single highest-value change and answer in the required JSON schema.

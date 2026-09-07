@@ -99,7 +99,7 @@ func Run(ctx context.Context, c analyze.Client, opts Options) (*Result, error) {
 	step("top hotspot: %s (%.1f%% of attributed %s)",
 		hotspots.Hotspots[0].Function, hotspots.Hotspots[0].FlatPct, cfg.SampleUnit)
 
-	step("asking %s for a diagnosis", firstNonEmpty(opts.Analyze.Model, analyze.DefaultModel))
+	step("asking %s for a diagnosis", firstNonEmpty(opts.Analyze.Model, "the model"))
 	diagnosis, err := analyze.Run(ctx, c, hotspots, opts.Analyze)
 	res.Diagnosis = diagnosis
 	if err != nil {

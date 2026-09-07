@@ -21,8 +21,9 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "profadvisor",
 		Short: "Find, fix, and prove hot-paths in Go benchmarks",
-		Long: "profadvisor captures a profile from a Go benchmark, asks Claude what " +
-			"to do about the hot path, applies the suggestion on a branch, and " +
+		Long: "profadvisor captures a profile from a Go benchmark, asks a language " +
+			"model what to do about the hot path, applies the suggestion on a " +
+			"branch, and " +
 			"re-measures to decide whether it actually helped.\n\n" +
 			"The objective is chosen with --profile and --unit: CPU time (ns/op) by " +
 			"default, or memory (B/op, allocs/op). A memory run keeps ns/op as a " +

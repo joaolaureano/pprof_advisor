@@ -1,6 +1,7 @@
 # profadvisor
 
-A CLI that finds a hot-path in a Go benchmark, asks Claude how to fix it, and
+A CLI that finds a hot-path in a Go benchmark, asks a language model how to fix
+it, and
 then measures whether the fix actually worked. It optimizes either CPU time or
 memory allocation, chosen per run.
 
@@ -78,8 +79,9 @@ can change.
   structural; nothing else needs installing.
 - The target repository is a git repository if you intend to use `apply` or
   `run`; the diff is applied on a branch there, and a dirty tree is refused.
-- `ANTHROPIC_API_KEY`, or credentials from `ant auth login`. Needed by `analyze`
-  only; `capture`, `extract`, and `verify` work offline.
+- An API key for the selected model provider: `PROFADVISOR_API_KEY`, or that
+  provider's own conventional variable. Needed by `analyze` and `run` only;
+  `capture`, `extract`, and `verify` work offline.
 
 ## I/O contract
 
@@ -152,8 +154,13 @@ half says that the fix is about allocation.
 
 ### `profadvisor analyze <extract.json>`
 
-Sends the hotspots and their source to Claude and returns a diagnosis plus a
-unified diff.
+Sends the hotspots and their source to a language model and returns a diagnosis
+plus a unified diff.
+
+The provider is chosen with `--provider` (or `PROFADVISOR_PROVIDER`) and the
+wording comes from a prompt catalog, overridable with `--prompts`. Nothing here
+is tied to one vendor: `internal/analyze` names none, and each provider is one
+adapter under `internal/llm/`.
 
 **The output is a hypothesis.** Nothing in it has been measured, and the model's
 own `confidence` field is not evidence. A suggestion only counts once `verify`
