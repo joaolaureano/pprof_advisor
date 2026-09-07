@@ -1,15 +1,15 @@
 {
   "0": "Run",
-  "1": "modelFlags",
+  "1": "newClient",
   "2": "profadvisor",
-  "3": "Run",
+  "3": "FromReaders",
   "4": "Run",
   "5": "github.com/spf13/cobra.Command",
   "6": "FromProfile",
   "7": "Run",
   "8": "table",
   "9": "providers.go",
-  "10": "Catalog",
+  "10": "Run",
   "11": "example.com/profadvisor/fixture",
   "12": "github.com/joaolaureano/profadvisor",
   "13": "Run",
@@ -25,5 +25,7 @@
   "23": "escape/README.md",
   "24": "doc.go",
   "25": "example.com/escapecorpus",
-  "26": "load"
+  "26": "load",
+  "27": "buildUserPrompt",
+  "28": "Catalog"
 }
