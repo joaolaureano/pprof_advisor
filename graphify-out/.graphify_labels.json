@@ -9,7 +9,7 @@
   "7": "Run",
   "8": "resolveTarget",
   "9": "providers.go",
-  "10": "Run",
+  "10": "Load",
   "11": "example.com/profadvisor/fixture",
   "12": "github.com/joaolaureano/profadvisor",
   "13": "Run",
@@ -26,6 +26,6 @@
   "24": "doc.go",
   "25": "example.com/escapecorpus",
   "26": "testing.B",
-  "27": "Text",
+  "27": "Run",
   "28": "corpus.go"
 }

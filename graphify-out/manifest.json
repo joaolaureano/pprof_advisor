@@ -162,15 +162,15 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1788808470.2251668,
-    "seen": 1788808507.233151,
-    "ast_hash": "a6cf7c8e57362fa2c1cb82b8c09fc087",
+    "mtime": 1788820149.2314956,
+    "seen": 1788820163.539993,
+    "ast_hash": "26b267af32fba2c6317bbb4786a922f3",
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1788808448.0730247,
-    "seen": 1788808507.233152,
-    "ast_hash": "ce5aab99ed5dc2f4a3cdcb2fffe87b42",
+    "mtime": 1788820158.833347,
+    "seen": 1788820163.539994,
+    "ast_hash": "b84c1332bd7e701ac11f8d61e3d1804f",
     "semantic_hash": ""
   },
   "testdata/bench-after-faster.txt": {

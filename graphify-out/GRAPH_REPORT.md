@@ -1,7 +1,7 @@
 # Graph Report - pprof_advisor  (2026-09-07)
 
 ## Corpus Check
-- 92 files · ~74,313 words
+- 92 files · ~73,750 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `21be9996`
+- Built from commit: `fa091172`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -24,7 +24,7 @@
 - FromProfile
 - Run
 - resolveTarget
-- Run
+- Load
 - example.com/profadvisor/fixture
 - github.com/joaolaureano/profadvisor
 - Run
@@ -34,7 +34,7 @@
 - escape/README.md
 - example.com/escapecorpus
 - testing.B
-- Text
+- Run
 - corpus.go
 
 ## God Nodes (most connected - your core abstractions)
@@ -68,11 +68,11 @@
 
 ### Community 0 - "testing.T"
 Cohesion: 0.07
-Nodes (56): TestBenchgenCLI(), TestBenchgenCLIImplFlagRepeatable(), TestBenchgenCLIImplFlagValidation(), TestBenchgenCLIInterfaceParameter(), TestBenchgenCLIRequiredFlags(), invoke(), TestCLIRejectsInvalidInputs(), TestEscapeCLI() (+48 more)
+Nodes (62): TestBenchgenCLI(), TestBenchgenCLIImplFlagRepeatable(), TestBenchgenCLIImplFlagValidation(), TestBenchgenCLIInterfaceParameter(), TestBenchgenCLIRequiredFlags(), invoke(), TestCLIRejectsInvalidInputs(), TestEscapeCLI() (+54 more)
 
 ### Community 1 - "newClient"
-Cohesion: 0.09
-Nodes (21): fakeClient, client, init(), newClient(), TestCompleteParsesSSEStream(), TestError400ResponseIncludesBody(), TestMissingAPIKeyError(), TestRequestBodyFormat() (+13 more)
+Cohesion: 0.08
+Nodes (28): fakeClient, client, init(), newClient(), TestCompleteParsesSSEStream(), TestError400ResponseIncludesBody(), TestMissingAPIKeyError(), TestRequestBodyFormat() (+20 more)
 
 ### Community 2 - "profadvisor"
 Cohesion: 0.06
@@ -83,12 +83,12 @@ Cohesion: 0.12
 Nodes (31): io.Reader, memoryRepo(), TestInvalidRunConfigurationDoesNotCapture(), TestMemoryPipeline(), gitOut(), seedRepo(), TestPipelineProducesArtifactsThatVerifyAsAnImprovement(), TestPipelineProducesArtifactsThatVerifyAsARegression() (+23 more)
 
 ### Community 4 - "Resolve"
-Cohesion: 0.12
-Nodes (25): io.Writer, Options, Options, Result, profileFile(), profileFlags(), Run(), TestProfileFlagsPerKind() (+17 more)
+Cohesion: 0.14
+Nodes (23): io.Writer, Options, Result, profileFile(), profileFlags(), Run(), TestProfileFlagsPerKind(), TestRunAgainstFixtureModule() (+15 more)
 
 ### Community 5 - "github.com/spf13/cobra.Command"
-Cohesion: 0.09
-Nodes (27): newAnalyzeCmd(), newApplyCmd(), newBenchgenCmd(), newCaptureCmd(), newEscapeCmd(), newExtractCmd(), measurementFlags(), credentialsHelp() (+19 more)
+Cohesion: 0.13
+Nodes (18): newAnalyzeCmd(), newApplyCmd(), newBenchgenCmd(), newCaptureCmd(), newEscapeCmd(), newExtractCmd(), measurementFlags(), credentialsHelp() (+10 more)
 
 ### Community 6 - "FromProfile"
 Cohesion: 0.21
@@ -96,15 +96,15 @@ Nodes (23): functionStats, github.com/google/pprof/profile.Function, github.com/
 
 ### Community 7 - "Run"
 Cohesion: 0.26
-Nodes (23): context.Context, changedFiles(), git(), gitError(), nextBranch(), numstat(), rollback(), Run() (+15 more)
+Nodes (23): context.Context, changedFiles(), git(), gitError(), Options, nextBranch(), numstat(), rollback() (+15 more)
 
 ### Community 8 - "resolveTarget"
-Cohesion: 0.09
-Nodes (37): listedPackage, go/ast.File, go/types.Interface, go/types.Named, go/types.Package, go/types.Type, renderCallArguments(), TestRenderCallArgumentsKeepsTwoDigitPlaceholdersDistinct() (+29 more)
+Cohesion: 0.17
+Nodes (20): listedPackage, go/ast.File, go/types.Interface, go/types.Named, go/types.Package, go/types.Type, collectPackageLevelNames(), flattenFuzzArgument() (+12 more)
 
-### Community 10 - "Run"
-Cohesion: 0.31
-Nodes (12): Options, responseSchema(), Run(), realExtract(), TestAPIErrorIsWrapped(), TestEmptyDiffIsRejected(), TestNoHotspotsIsAnError(), TestNonJSONResponseIsAnError() (+4 more)
+### Community 10 - "Load"
+Cohesion: 0.10
+Nodes (30): modelOptions, github.com/joaolaureano/profadvisor/internal/analyze.Client, Options, responseSchema(), BenchmarkBuildUserPrompt(), BenchmarkSystemPrompt(), systemPrompt(), extractPlaceholders() (+22 more)
 
 ### Community 13 - "Run"
 Cohesion: 0.11
@@ -119,34 +119,34 @@ Cohesion: 0.40
 Nodes (3): os/exec.Cmd, Configure(), Configure()
 
 ### Community 16 - "Parse"
-Cohesion: 0.09
-Nodes (43): position, Result, versionTuple, checkVersion(), hasAnyPrefix(), isExplanationHeading(), isFlowContinuation(), isIgnoredDiagnostic() (+35 more)
+Cohesion: 0.12
+Nodes (34): position, Result, versionTuple, checkVersion(), hasAnyPrefix(), isExplanationHeading(), isFlowContinuation(), isIgnoredDiagnostic() (+26 more)
 
 ### Community 26 - "testing.B"
 Cohesion: 0.17
 Nodes (14): testing.B, BenchmarkParse(), loadFixtureContent(), rewriteFilesInFixture(), BenchmarkFromProfile(), Table, matches(), New() (+6 more)
 
-### Community 27 - "Text"
-Cohesion: 0.10
-Nodes (32): promptBuilder, Config, strings.Builder, buildUserPrompt(), Coster(), Dec1(), Nanos(), Pct() (+24 more)
+### Community 27 - "Run"
+Cohesion: 0.08
+Nodes (38): promptBuilder, Config, strings.Builder, Run(), realExtract(), TestAPIErrorIsWrapped(), TestEmptyDiffIsRejected(), TestNoHotspotsIsAnError() (+30 more)
 
 ### Community 28 - "corpus.go"
 Cohesion: 0.17
 Nodes (23): go/ast.CallExpr, go/ast.Expr, go/token.Token, boolLiteral(), byteSliceLiteral(), charLiteral(), corpusLiteral(), decodeCorpusSeed() (+15 more)
 
 ## Knowledge Gaps
-- **30 isolated node(s):** `github.com/joaolaureano/profadvisor`, `listedPackage`, `position`, `example.com/escapecorpus`, `example.com/profadvisor/fixture` (+25 more)
+- **31 isolated node(s):** `github.com/joaolaureano/profadvisor`, `listedPackage`, `position`, `example.com/escapecorpus`, `example.com/profadvisor/fixture` (+26 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **4 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `FromProfile()` connect `FromProfile` to `testing.T`, `Resolve`, `Run`, `testing.B`, `Text`?**
+- **Why does `FromProfile()` connect `FromProfile` to `testing.T`, `Resolve`, `Load`, `testing.B`, `Run`?**
   _High betweenness centrality (0.061) - this node is a cross-community bridge._
-- **Why does `Parse()` connect `Parse` to `testing.B`, `Text`, `Run`?**
+- **Why does `Parse()` connect `Parse` to `testing.T`, `testing.B`, `Run`?**
   _High betweenness centrality (0.056) - this node is a cross-community bridge._
-- **Why does `Run()` connect `Run` to `testing.T`, `newClient`, `Resolve`, `github.com/spf13/cobra.Command`, `Run`, `Text`?**
+- **Why does `Run()` connect `Run` to `newClient`, `Resolve`, `github.com/spf13/cobra.Command`, `Run`, `Load`?**
   _High betweenness centrality (0.048) - this node is a cross-community bridge._
 - **Are the 5 inferred relationships involving `FromProfile()` (e.g. with `BenchmarkFromProfile()` and `load()`) actually correct?**
   _`FromProfile()` has 5 INFERRED edges - model-reasoned connections that need verification._
