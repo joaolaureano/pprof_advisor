@@ -158,16 +158,22 @@ There is no exit code 2. It used to mean "the tool worked and the answer was
 bad", which put a measured regression into the process contract; a verdict is
 now a field in a document and nothing else. See "Reporting and judging" below.
 
-Each document carries `schema_version`, currently **3**, with one exception:
+Each document carries `schema_version`, currently **4**, with one exception:
 `capture` writes no version field. Its result is an artifact index — the two
 paths plus the `go` invocation — so do not branch on a version when reading it.
-The version changes when the shape of the document changes.
+
+The version changes when the shape of a document changes, or when the set of
+documents does. Version 4 is the second kind: the shapes of `extract`, `apply`
+and `verify` are byte-for-byte what they were at 3, but the diagnosis document
+is gone along with the command that produced it, and `prompt` added one. A
+consumer reading a single document sees no difference; one that walked the chain
+does.
 
 `escape` is the exception, and deliberately so: its report carries
 `schema_version` **1** from a separate constant. The capture → extract → apply →
 verify documents are links in one chain and move together; the escape
 report is not in that chain, and its reason to change is the compiler's
-diagnostic vocabulary. Sharing one number would bump five documents every time
+diagnostic vocabulary. Sharing one number would bump every document each time
 the toolchain rewords a line.
 
 ## Reporting and judging
@@ -204,7 +210,8 @@ neither reads a metric. Cost fields (`total`, `analyzed`,
 `flat`, `cum`, `line_costs`) are plain numbers in `measurement.sample_unit`:
 nanoseconds for a CPU run, bytes or object counts for a memory one. **Do not
 assume nanoseconds.** Version 1 named these fields `*_nanos` and had no
-`measurement`; that is the whole difference, and why the version moved.
+`measurement`; version 2 made the measurement explicit, which is why those names
+went away.
 
 ## Commands
 
@@ -258,12 +265,15 @@ second `--out`-only run against a package that still holds a previously
 installed copy fails rather than rewriting the record. Deleting the installed
 file clears the conflict.
 
-This reporter has its own schema version **4** and no measurement object.
-`generated: true` with `validated: false` means generation succeeded, not that
-the seeds passed: generation never executes the target and needs no API key.
-Schema version 4 added support for interface parameters and the `implementations`
+This reporter has its own schema version, **4**, and no measurement object. It
+is counted from a separate constant and happens to equal the chain's version
+right now; the two are unrelated and will diverge again, so do not read one as
+the other. `benchgen`'s 4 added interface parameters and the `implementations`
 field in the manifest, which records the chosen concrete type for each interface
 as `"Interface=Type"` strings.
+
+`generated: true` with `validated: false` means generation succeeded, not that
+the seeds passed: generation never executes the target.
 
 Replay the generated `FuzzProfadvisor_<name>` seeds before measuring
 `BenchmarkProfadvisor_<name>`. Exploration via `go test -fuzz` is a separate user

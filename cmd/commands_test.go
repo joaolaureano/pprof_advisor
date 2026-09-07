@@ -54,7 +54,7 @@ func TestVerifyCLIObjectiveAndExitContract(t *testing.T) {
 			if err := json.Unmarshal([]byte(out), &res); err != nil {
 				t.Fatalf("stdout is not one JSON document: %v\n%s", err, out)
 			}
-			if res.SchemaVersion != 3 || res.Verdict != tc.verdict || res.Measurement.Unit != tc.unit {
+			if res.SchemaVersion != schema.Version || res.Verdict != tc.verdict || res.Measurement.Unit != tc.unit {
 				t.Fatalf("result=%+v", res)
 			}
 		})
@@ -75,7 +75,7 @@ func TestCLIRejectsInvalidInputs(t *testing.T) {
 	}
 }
 
-func TestExtractCLIEmitsV3CPU(t *testing.T) {
+func TestExtractCLIStampsTheSchemaVersion(t *testing.T) {
 	code, out, diagnostics := invoke("extract", filepath.Join("..", "testdata", "all.prof"))
 	if code != 0 {
 		t.Fatalf("exit=%d %s", code, diagnostics)
@@ -84,7 +84,7 @@ func TestExtractCLIEmitsV3CPU(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &res); err != nil {
 		t.Fatal(err)
 	}
-	if res.SchemaVersion != 3 || res.Profile.Measurement.Profile != measurement.CPU {
+	if res.SchemaVersion != schema.Version || res.Profile.Measurement.Profile != measurement.CPU {
 		t.Fatalf("result=%+v", res.Profile)
 	}
 	for _, legacy := range []string{"flat_nanos", "line_nanos", "total_nanos", "analyzed_nanos"} {

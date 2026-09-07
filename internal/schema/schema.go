@@ -14,12 +14,18 @@ import "github.com/joaolaureano/profadvisor/internal/measurement"
 // Version is stamped into every document so a consumer can reject input
 // produced by an incompatible build instead of misreading it.
 //
+// Version 4 changed the set of documents rather than the shape of any one of
+// them: the diagnosis document is gone with the command that produced it, and
+// PromptResult took its place. A consumer that reads only extract, apply or
+// verify sees no difference, but one that walked the chain does, so the number
+// moves.
+//
 // Version 2 made the measurement explicit. Version 1 spoke only nanoseconds:
 // every cost field was named *_nanos and every consumer was free to assume CPU
 // time. Once a run can optimize bytes per operation those names are lies, so
 // the costs became unit-less numbers and each document now carries the
 // measurement.Config that says how to read them.
-const Version = 3
+const Version = 4
 
 // ---------------------------------------------------------------------------
 // extract
