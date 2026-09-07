@@ -29,6 +29,11 @@ func TestResolveTarget(t *testing.T) {
  type Alias = string
  func hidden(s string) (int,error) {return len(s),nil}
  func bytes(b []byte) {}
+
+ func number(n int64) {}
+ func flag(v bool) {}
+ func ratio(v float32) {}
+ func runeArg(v rune) {}
  func alias(a Alias) {}
  func named(n Named) {}
  func generic[T any](s string) {}
@@ -37,10 +42,10 @@ func TestResolveTarget(t *testing.T) {
  type T struct{}
  func (T) method(s string) {}
  `)
-	for _, name := range []string{"hidden", "bytes", "alias", "named", "generic", "variadic", "zero", "method", "missing"} {
+	for _, name := range []string{"hidden", "bytes", "alias", "number", "flag", "ratio", "runeArg", "named", "generic", "variadic", "zero", "method", "missing"} {
 		t.Run(name, func(t *testing.T) {
 			target, err := resolveTarget(context.Background(), Options{Dir: dir, Package: ".", Function: name})
-			wantOK := name == "hidden" || name == "bytes" || name == "alias"
+			wantOK := name == "hidden" || name == "bytes" || name == "alias" || name == "number" || name == "flag" || name == "ratio" || name == "runeArg"
 			if (err == nil) != wantOK {
 				t.Fatalf("target %+v, error %v", target, err)
 			}

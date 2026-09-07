@@ -55,6 +55,9 @@ func TestIntegrationGeneratedHarness(t *testing.T) {
 	}{
 		{"string", "import \"errors\"\nfunc process(s string) (int, error) { return len(s), errors.New(\"expected invalid input\") }", []string{`string("hello")`, `string("\x00\xff")`}},
 		{"bytes", "func process(b []byte) int { n := 0; for _, v := range b { n += int(v) }; return n }", []string{`[]byte("hello")`, `[]byte("\x00\xff")`}},
+		{"integer", "func process(n int64) int64 { return n * 2 }", []string{`int64(-3)`, `int64(17)`}},
+		{"float", "func process(v float64) float64 { return v / 2 }", []string{`float64(-1.5)`, `float64(4.25)`}},
+		{"bool", "func process(v bool) bool { return !v }", []string{`bool(true)`, `bool(false)`}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := integrationTarget(t, tc.source, tc.seeds...)

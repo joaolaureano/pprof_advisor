@@ -156,8 +156,11 @@ assume nanoseconds.** Version 1 named these fields `*_nanos` and had no
 
 Generates offline same-package fuzz tests and benchmarks from a frozen Go fuzz
 v1 corpus. Accepts one non-generic, non-variadic package-level function with one
-argument exactly `string` or `[]byte`, including unexported functions. Requires
-a Go 1.24+ target toolchain. Returns are discarded; fuzz replay detects panics
+native Go fuzz argument: `string`, `[]byte`, `bool`, every built-in signed or
+unsigned integer type, `uintptr`, `rune`, `byte`, `float32`, or `float64`,
+including unexported functions. Defined types are not supported. Corpus values
+use their exact explicit conversion, for example `int64(-42)` or `bool(true)`.
+Requires a Go 1.24+ target toolchain. Returns are discarded; fuzz replay detects panics
 without inventing correctness properties or treating returned errors as failures.
 The caller must ensure determinism, no external state, and no mutation or
 retention of the input.

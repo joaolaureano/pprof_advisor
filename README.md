@@ -66,7 +66,9 @@ string("example")
 ```
 
 For a `[]byte` argument, use `[]byte("example\\x00\\xff")` instead of
-`string("example")`. Pass the directory containing these files explicitly:
+`string("example")`. Scalar arguments use an explicit conversion too, such as
+`int64(-42)`, `bool(true)`, or `float64(1.5)`. Pass the directory containing
+these files explicitly:
 
 ```sh
 ./profadvisor benchgen --dir /path/to/repo --pkg ./internal/parser \
@@ -74,10 +76,13 @@ For a `[]byte` argument, use `[]byte("example\\x00\\xff")` instead of
 ```
 
 One execution handles one package-level function, including unexported functions.
-It must be non-generic, non-variadic, and accept exactly `string` or `[]byte`.
+It must be non-generic, non-variadic, and accept one native Go fuzz type:
+`string`, `[]byte`, `bool`, `int`, `int8`, `int16`, `int32` (including `rune`),
+`int64`, `uint`, `uint8` (including `byte`), `uint16`, `uint32`, `uint64`,
+`uintptr`, `float32`, or `float64`. Defined types are not yet supported.
 Return values, including errors, are discarded. Methods and custom setup are
-unsupported, as are packages using cgo. The target must use a Go 1.24+
-toolchain for `b.Loop()`.
+unsupported, as are packages using cgo. The target must use a Go 1.24+ toolchain
+for `b.Loop()`.
 The function must be deterministic, independent of external state, and must
 neither modify nor retain its argument. These are caller obligations; generation
 cannot prove them.

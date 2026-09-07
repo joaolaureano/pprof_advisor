@@ -159,20 +159,35 @@ func resolveTarget(ctx context.Context, o Options) (Target, error) {
 	}
 	sig := fn.Type().(*types.Signature)
 	if sig.Recv() != nil || sig.TypeParams().Len() != 0 || sig.Variadic() || sig.Params().Len() != 1 {
-		return target, fmt.Errorf("function must be non-generic, non-variadic and accept one string or []byte argument")
+		return target, fmt.Errorf("function must be non-generic, non-variadic and accept one native Go fuzz type argument")
 	}
-	input := ""
-	typ := sig.Params().At(0).Type()
-	if types.Identical(typ, types.Typ[types.String]) {
-		input = "string"
-	}
-	if types.Identical(typ, types.NewSlice(types.Typ[types.Byte])) {
-		input = "[]byte"
-	}
+	input := fuzzInputType(sig.Params().At(0).Type())
 	if input == "" {
-		return target, fmt.Errorf("function argument must be exactly string or []byte")
+		return target, fmt.Errorf("function argument must be one native Go fuzz type: string, []byte, bool, integer, uintptr, rune, float32, or float64")
 	}
 	return Target{Dir: p.Dir, Package: p.ImportPath, Name: p.Name, Function: o.Function, InputType: input, GoVersion: version, FuzzName: fuzzName, BenchmarkName: benchmarkName}, nil
+}
+
+// fuzzInputType uses types.Identical deliberately: aliases such as rune and
+// byte are accepted as their underlying predeclared fuzz types, while defined
+// types are rejected because testing.F cannot seed them directly.
+func fuzzInputType(typ types.Type) string {
+	if types.Identical(typ, types.Typ[types.String]) {
+		return "string"
+	}
+	if types.Identical(typ, types.NewSlice(types.Typ[types.Byte])) {
+		return "[]byte"
+	}
+	for _, basic := range []types.BasicKind{
+		types.Bool, types.Int, types.Int8, types.Int16, types.Int32, types.Int64,
+		types.Uint, types.Uint8, types.Uint16, types.Uint32, types.Uint64, types.Uintptr,
+		types.Float32, types.Float64,
+	} {
+		if types.Identical(typ, types.Typ[basic]) {
+			return types.Typ[basic].Name()
+		}
+	}
+	return ""
 }
 
 func supportsLoop(version string) bool {

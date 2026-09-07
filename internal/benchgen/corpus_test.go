@@ -67,3 +67,32 @@ func TestCorpusStableDeduplicated(t *testing.T) {
 		t.Fatal("unstable corpus")
 	}
 }
+
+func TestDecodeScalarSeedCanonicalizesAndRejectsMismatches(t *testing.T) {
+	for _, tc := range []struct {
+		input, body, want string
+		bad               bool
+	}{
+		{"bool", "bool(true)", "bool(true)", false},
+		{"int8", "int8(-7)", "int8(-7)", false},
+		{"uint16", "uint16(0xff)", "uint16(255)", false},
+		{"int32", "int32(65)", "int32(65)", false},
+		{"float32", "float32(1.5)", "float32(1.5)", false},
+		{"float64", "float64(-2e3)", "float64(-2000)", false},
+		{"uint8", "int(1)", "", true},
+		{"int8", "int8(128)", "", true},
+		{"uint", "uint(-1)", "", true},
+		{"bool", "bool(1)", "", true},
+		{"float64", "float64(NaN)", "", true},
+	} {
+		t.Run(tc.input+tc.body, func(t *testing.T) {
+			data, literal, err := decodeCorpusSeed("go test fuzz v1\n"+tc.body+"\n", tc.input)
+			if (err != nil) != tc.bad {
+				t.Fatalf("err=%v", err)
+			}
+			if !tc.bad && (string(data) != tc.want || literal != tc.want) {
+				t.Fatalf("data=%q literal=%q want=%q", data, literal, tc.want)
+			}
+		})
+	}
+}

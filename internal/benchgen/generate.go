@@ -37,7 +37,7 @@ func {{.Target.BenchmarkName}}({{.B}} *{{.Testing}}.B) {
 `
 
 func generateCode(target Target, seeds []Seed) ([]byte, error) {
-	if target.InputType != "string" && target.InputType != "[]byte" {
+	if !supportedInputType(target.InputType) {
 		return nil, fmt.Errorf("unsupported input type %q", target.InputType)
 	}
 	ident := func(base string) string {
@@ -55,9 +55,9 @@ func generateCode(target Target, seeds []Seed) ([]byte, error) {
 	ordered := append([]Seed(nil), seeds...)
 	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Hash < ordered[j].Hash })
 	for _, seed := range ordered {
-		literal := strconv.Quote(string(seed.Data))
-		if target.InputType == "[]byte" {
-			literal = "[]byte(" + literal + ")"
+		literal := seed.Literal
+		if literal == "" {
+			literal = defaultSeedLiteral(target.InputType, seed.Data)
 		}
 		data.Seeds = append(data.Seeds, entry{Name: strconv.Quote(seed.Hash), Literal: literal})
 	}
@@ -74,4 +74,20 @@ func generateCode(target Target, seeds []Seed) ([]byte, error) {
 		return nil, fmt.Errorf("format generated harness: %w", err)
 	}
 	return code, nil
+}
+
+func supportedInputType(inputType string) bool {
+	switch inputType {
+	case "string", "[]byte", "bool", "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "uintptr", "float32", "float64":
+		return true
+	}
+	return false
+}
+
+func defaultSeedLiteral(inputType string, data []byte) string {
+	literal := strconv.Quote(string(data))
+	if inputType == "[]byte" {
+		return "[]byte(" + literal + ")"
+	}
+	return literal
 }

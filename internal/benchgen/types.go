@@ -33,6 +33,9 @@ type Seed struct {
 	Hash    string   `json:"hash"`
 	Origins []string `json:"origins"`
 	Data    []byte   `json:"-"`
+	// Literal is a canonical Go expression used in generated source. It is kept
+	// out of the manifest because the hash is the stable seed identity.
+	Literal string `json:"-"`
 }
 
 type Manifest struct {
