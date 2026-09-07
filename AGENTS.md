@@ -1,9 +1,13 @@
 # profadvisor
 
-A CLI that finds a hot-path in a Go benchmark, asks a language model how to fix
-it, and
-then measures whether the fix actually worked. It optimizes CPU time, memory
-allocation, or contention (block or mutex), chosen per run.
+A CLI that measures where a Go benchmark spends time or memory, and decides
+whether a change improved it. It optimizes CPU time, memory allocation, or
+contention (block or mutex), chosen per run.
+
+It runs entirely offline: no API key, no network, no vendor, and `net/http` is
+not linked into the binary. A language model is optional and external. `prompt`
+renders the question as text and sends nothing; whoever answers is the caller's
+choice; `apply` takes the patch that comes back.
 
 It answers questions a benchmark can settle: why a Go package is slow or
 allocation-heavy, and whether a given change improves it. It is not a profiler
@@ -50,8 +54,8 @@ Do **not** use it when:
   Lock and channel contention are in scope via `--profile block` and
   `--profile mutex`.
 - There is no benchmark and the code cannot be exercised deterministically.
-  Without a benchmark there is nothing to compare against, and the verdict step —
-  the only step that measures anything — cannot run.
+  Without a benchmark there is nothing to compare against, and `verify` — the
+  only step that measures anything — cannot run.
 
 ## Choosing the objective
 
@@ -115,30 +119,28 @@ caused the wait, which is the line a patch can change.
 
 - A Go toolchain on PATH. The target's benchmark has to compile, so this is
   structural; nothing else needs installing.
-- The target repository is a git repository if you intend to use `apply` or
-  `run`; the diff is applied on a branch there, and a dirty tree is refused.
-- An API key for the selected model provider: `PROFADVISOR_API_KEY`, or that
-  provider's own conventional variable. Needed by `analyze` and `run` only;
-  `capture`, `extract`, `verify`, and `escape` work offline.
-- `escape` additionally needs nothing else: no benchmark, no profile, no git
-  repository. It only needs the target to compile.
+- The target repository is a git repository if you intend to use `apply`; the
+  diff is applied on a branch there, and a dirty tree is refused.
+- Nothing else. There is no API key, no configuration file and no network
+  access anywhere in the tool.
+- `escape` needs less still: no benchmark, no profile, no git repository. It
+  only needs the target to compile.
 
-## Providers and prompts
+## Where a model fits
 
-No vendor is built in. `--provider` (or `PROFADVISOR_PROVIDER`) selects an
-adapter under `internal/llm/`; `anthropic` is the default and `openai` is the
-other one shipped. `--model`, `--base-url` and the API key come from flags or
-from `PROFADVISOR_MODEL`, `PROFADVISOR_BASE_URL` and `PROFADVISOR_API_KEY`, with
-the key falling back to the provider's own conventional variable. `--base-url`
-points at any endpoint speaking the selected provider's wire format, including a
-local one.
+Nowhere inside the tool. The pipeline is `capture` → `extract` → `apply` →
+`capture` → `verify`, and every step is deterministic and offline.
 
-Every word sent lives in `internal/prompt/prompts.json`, embedded at build time.
+`prompt` sits between `extract` and `apply` as a rendering step: it turns an
+extract document into the text of a request, and prints it. The caller decides
+whether to send it, to whom, and what to do with the reply. A diff that comes
+back is applied with `apply` and judged by `verify` like any other patch.
+
+The wording lives in `internal/prompt/prompts.json`, embedded at build time.
 Entries carry their text and the placeholders they declare, and the two are
-checked against each other at load, so a mistyped `{unit}` fails at startup
-rather than after a benchmark has already been paid for. `--prompts <file>`
-overrides the catalog without rebuilding. The exact bytes sent for each
-objective are pinned by golden files under `testdata/prompts/`.
+checked against each other at load, so a mistyped `{unit}` fails at startup.
+`--prompts <file>` renders from a different catalog. The exact bytes are pinned
+by golden files under `testdata/prompts/`.
 
 ## I/O contract
 
@@ -162,8 +164,8 @@ paths plus the `go` invocation — so do not branch on a version when reading it
 The version changes when the shape of the document changes.
 
 `escape` is the exception, and deliberately so: its report carries
-`schema_version` **1** from a separate constant. The capture → extract → analyze
-→ apply → verify documents are links in one chain and move together; the escape
+`schema_version` **1** from a separate constant. The capture → extract → apply →
+verify documents are links in one chain and move together; the escape
 report is not in that chain, and its reason to change is the compiler's
 diagnostic vocabulary. Sharing one number would bump five documents every time
 the toolchain rewords a line.
@@ -172,7 +174,7 @@ the toolchain rewords a line.
 
 There are two kinds of command:
 
-**Reporters** — `capture`, `extract`, `analyze`, `apply`, `escape`, `run`. They
+**Reporters** — `capture`, `extract`, `prompt`, `apply`, `escape`. They
 produce a document describing what they found or did. None of them decides
 whether anything is good. `escape` is the clearest case: a heap allocation is
 evidence, not a defect.
@@ -180,7 +182,7 @@ evidence, not a defect.
 **One judge** — `verify`. It is the only command that reaches a verdict, and it
 does so from two benchmark outputs, not from any other document this tool
 produces. A p-value needs N samples of a metric; a profile has none, and a
-diagnosis is a hypothesis.
+a rendered prompt is a question, not an answer.
 
 The verdict is not an opinion in the loose sense. The statistics are mechanical
 — `benchmath.AssumeNothing`, a non-parametric comparison — and the `p_value`,
@@ -194,10 +196,11 @@ them does not.
 applies, and re-captures, then hands you the two `bench.txt` paths and the
 `verify` invocation that turns them into a verdict.
 
-`capture`, `extract`, `analyze`, `verify` and `run` also carry a `measurement`
-object — profile, unit, pprof sample type, sample unit, and attribution rule. It
-is top-level in all of them except `extract`, which nests it under `profile`.
-`apply` has none: it moves a diff onto a branch and reads no metric. Cost fields (`total`, `analyzed`,
+`capture`, `extract` and `verify` also carry a `measurement` object — profile,
+unit, pprof sample type, sample unit, and attribution rule. It is top-level in
+`capture` and `verify`, and nested under `profile` in `extract`. `apply` and
+`prompt` have none: one moves a diff onto a branch, the other renders text, and
+neither reads a metric. Cost fields (`total`, `analyzed`,
 `flat`, `cum`, `line_costs`) are plain numbers in `measurement.sample_unit`:
 nanoseconds for a CPU run, bytes or object counts for a memory one. **Do not
 assume nanoseconds.** Version 1 named these fields `*_nanos` and had no
@@ -324,7 +327,7 @@ The profile written depends on `--profile`:
 - `mutex.prof` for a mutex-contention profile
 
 Both artifacts come from the same run, deliberately: the profile feeds the
-diagnosis and `bench.txt` feeds the verdict, and if they came from different runs
+ranking and `bench.txt` feeds the verdict, and if they came from different runs
 they would describe different programs.
 
 `-benchmem` is always on, whatever the objective, because `verify` needs
@@ -387,30 +390,50 @@ The list also includes frames outside the focus package, not just runtime
 noise. A function that spends half its time in `regexp.Compile` looks merely
 slow until `excluded` names the callee.
 
-### `profadvisor analyze <extract.json>`
+### `profadvisor prompt <extract.json> [--prompts <file>] [--module <path>]`
 
-Sends the hotspots and their source to a language model and returns a diagnosis
-plus a unified diff.
+Renders an extract document as the request a language model would be given:
+`system` frames the objective, `user` carries the hotspots and their source, and
+`response_schema` is the JSON schema of the answer they ask for.
 
-The provider is chosen with `--provider` (or `PROFADVISOR_PROVIDER`) and the
-wording comes from a prompt catalog, overridable with `--prompts`. Nothing here
-is tied to one vendor: `internal/analyze` names none, and each provider is one
-adapter under `internal/llm/`.
+**This command sends nothing.** It opens no connection, reads no API key and
+names no vendor. `net/http` is not linked into the binary. Where the text goes
+is the caller's decision — a chat window, or a structured-output request the
+caller builds itself with `response_schema`.
 
-**The output is a hypothesis.** Nothing in it has been measured, and the model's
-own `confidence` field is not evidence. A suggestion only counts once `verify`
-confirms it. Treat a high-confidence diff that fails verification as a normal
-outcome, not a bug.
+The wording lives in a JSON catalog embedded at build time. Entries carry their
+text and the placeholders they declare, and the two are checked against each
+other at load, so a mistyped `{unit}` fails at startup. `--prompts <file>`
+renders from a different catalog. `--module` sets the module path used to label
+source files; omitted, the paths are left as the profile recorded them.
 
-### `profadvisor apply <diagnosis.json>`
+`--format text` prints the two prompts ready to paste, under `=== system ===`
+and `=== user ===` headers, and omits the response schema — that is a machine
+contract, and a caller building its own request is reading the JSON form.
 
-Applies the diff on a new branch, `profadvisor/suggestion-N`, in the target
-repository, never on its working branch. `N` is the next free number, so
+The document carries `schema_version` and no `measurement` object: it is a
+rendering of an extract, and the objective it was rendered for is a property of
+that extract.
+
+Nothing in the answer has been measured. A diff that comes back is a hypothesis
+until `verify` compares two benchmark outputs.
+
+### `profadvisor apply <patch.diff>`
+
+Applies a unified diff on a new branch, `profadvisor/suggestion-N`, in the
+target repository, never on its working branch. The input is a plain patch file,
+whatever produced it; `-` reads standard input. `N` is the next free number, so
 repeated runs accumulate branches rather than overwriting one. Use `--dir` to
 name that repository; it defaults to the current directory.
 
-**It leaves the repository checked out on the suggestion branch.** That differs
-from `run`, which returns the repository to the branch it started on.
+The working tree must have no modified tracked files. If the patch fails to
+apply after the branch was created, the branch is deleted and the repository
+returns to the branch it started on.
+
+**Otherwise it leaves the repository checked out on the suggestion branch.** The
+commit message is the touched file list, or `--message` when given.
+
+`--dry-run` checks that the patch applies and changes nothing.
 
 ### `profadvisor verify --baseline <bench.txt> --after <bench.txt> [--unit <unit>]`
 
@@ -519,40 +542,16 @@ bug, and the findings are reported rather than dropped — but filter on `file`
 before treating a finding as something to act on. On a nine-package service this
 was four findings out of 683.
 
-### `profadvisor run`
-
-Runs capture → extract → analyze → apply → re-capture in order, and writes the
-full record: every intermediate artifact, so a disappointing result can be
-investigated without repeating the work. Use the individual commands when you
-want to inspect or edit anything in between — in particular, reading the diff
-before applying it is usually worth the extra step.
-
-**It does not verify.** The last progress line names the command that does:
-
-```
-profadvisor verify --baseline <baseline bench.txt> --after <after bench.txt>
-```
-
-Both paths are in the record, under `baseline.bench_path` and
-`after.bench_path`. Running that is what turns a run into an answer.
-
-The suggestion branch is kept whatever happens, and the repository is left on
-the branch you started from.
-
 ## What a result means
 
-A `run` on its own means only that the steps completed. It says nothing about
-whether the change helped — that is `verify`'s answer, and you have to ask for
-it. Once you do:
+A completed `capture` or `apply` means only that the step ran. Whether the
+change helped is `verify`'s answer:
 
-- `MELHOROU` — the objective improved significantly. This is the only outcome
-  that justifies keeping the change.
-- `SEM DIFERENÇA` — the change was neutral. Discard the branch; the hypothesis
-  was wrong, and knowing that cost one cycle.
-- `PIOROU` — the change was harmful. Discard the branch. This happens and is not
-  a malfunction. On a memory run, check which metric caused it: a `PIOROU` from
-  the `ns/op` guard with the objective improving means the model bought memory
-  with time, and is worth re-running with a narrower `--bench`.
+- `MELHOROU` — the objective improved at the chosen alpha.
+- `SEM DIFERENÇA` — the difference was not significant.
+- `PIOROU` — the objective or a guard regressed significantly. On a memory run,
+  the per-metric rows say which: a `PIOROU` from the `ns/op` guard while the
+  objective improved is a patch that spent time to save bytes.
 
 All three exit 0. The verdict is a field in the document; a regression is a
 result, not a tool failure. Nothing before `verify` measures anything.
