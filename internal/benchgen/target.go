@@ -241,10 +241,12 @@ func flattenFuzzArgument(typ types.Type, pkg *types.Package) ([]string, string, 
 }
 
 func shiftPlaceholders(expression string, count, offset int) string {
-	for i := count - 1; i >= 0; i-- {
-		expression = strings.ReplaceAll(expression, "$"+strconv.Itoa(i), "$"+strconv.Itoa(i+offset))
-	}
-	return expression
+	return mapPlaceholders(expression, func(n int) (string, bool) {
+		if n < count {
+			return "$" + strconv.Itoa(n+offset), true
+		}
+		return "", false
+	})
 }
 
 func goTypeString(typ types.Type, current *types.Package) string {

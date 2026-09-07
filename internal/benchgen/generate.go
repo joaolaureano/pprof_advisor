@@ -112,12 +112,12 @@ func renderCallArguments(templates, arguments []string) ([]string, error) {
 	}
 	result := make([]string, len(templates))
 	for i, expression := range templates {
-		// Replace longest placeholders first: replacing $1 before $10 would
-		// corrupt a harness with eleven or more flattened struct fields.
-		for index := len(arguments) - 1; index >= 0; index-- {
-			argument := arguments[index]
-			expression = strings.ReplaceAll(expression, "$"+strconv.Itoa(index), argument)
-		}
+		expression = mapPlaceholders(expression, func(n int) (string, bool) {
+			if n < len(arguments) {
+				return arguments[n], true
+			}
+			return "", false
+		})
 		if strings.Contains(expression, "$") {
 			return nil, fmt.Errorf("invalid generated argument template %q", templates[i])
 		}
