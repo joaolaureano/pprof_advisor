@@ -52,6 +52,68 @@ document yourself instead:
 See [AGENTS.md](AGENTS.md) for the full command reference and the I/O contract.
 That file is what both humans and agents should read first.
 
+## Generate benchmarks and fuzz tests offline
+
+`benchgen` turns a frozen directory of Go fuzz corpus files into a self-contained
+`_test.go` file and a manifest. It uses native Go fuzzing and fixed templates;
+no model, API key, or benchmark execution is involved in generation.
+
+Each corpus file must contain one value matching the function's argument:
+
+```text
+go test fuzz v1
+string("example")
+```
+
+For a `[]byte` argument, use `[]byte("example\\x00\\xff")` instead of
+`string("example")`. Pass the directory containing these files explicitly:
+
+```sh
+./profadvisor benchgen --dir /path/to/repo --pkg ./internal/parser \
+  --func parse --corpus /path/to/seeds --out /path/to/artifacts --write
+```
+
+One execution handles one package-level function, including unexported functions.
+It must be non-generic, non-variadic, and accept exactly `string` or `[]byte`.
+Return values, including errors, are discarded. Methods and custom setup are
+unsupported, as are packages using cgo. The target must use a Go 1.24+
+toolchain for `b.Loop()`.
+The function must be deterministic, independent of external state, and must
+neither modify nor retain its argument. These are caller obligations; generation
+cannot prove them.
+
+The generated `FuzzProfadvisor_parse` embeds each unique seed with `f.Add`.
+It detects panics; it defines no additional correctness property. The generated
+`BenchmarkProfadvisor_parse` has one sub-benchmark per seed, named by its SHA256.
+Inputs are prepared before `b.Loop()`, allocations are reported, and the measured
+loop calls the function directly. No fuzzing or random input generation occurs
+inside the benchmark.
+
+`--out` receives the code and manifest. `--write` additionally installs the same
+code in the target package. Existing files and conflicting symbols are refused.
+The JSON report and manifest use their own `schema_version: 1`; the report says
+`generated: true` and `validated: false` because the target has not been executed.
+Use `--format text` for a readable report. Diagnostics use stderr and exits are
+0 for success or 1 for failure, as with the other commands.
+
+Replay seeds before measuring, from the target repository:
+
+```sh
+go test ./internal/parser -run '^FuzzProfadvisor_parse$'
+go test ./internal/parser -run '^$' -bench '^BenchmarkProfadvisor_parse$' -benchmem -count 10
+# Optional exploration, separate from measurement:
+go test ./internal/parser -run '^$' -fuzz '^FuzzProfadvisor_parse$' -fuzztime 30s
+```
+
+You may explicitly import a selected directory from Go's fuzz cache as `--corpus`.
+Coverage discoveries reside in that cache; `testdata/fuzz` may also contain inputs
+that caused failures. Inspect and replay imported seeds. Each generation freezes
+the selected corpus: it does not follow the cache or choose inputs by speed.
+Keep identical generated code and corpus hashes for baseline and after runs.
+Version the test and manifest before using `run`, which requires a clean git
+tree. `benchgen` is not automatically invoked by `run`; measurement and `verify`
+remain separate steps.
+
 ## Providers
 
 The tool has no built-in vendor. `internal/analyze` builds a request in neutral

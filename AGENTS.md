@@ -152,6 +152,30 @@ assume nanoseconds.** Version 1 named these fields `*_nanos` and had no
 
 ## Commands
 
+### `profadvisor benchgen --dir <repo> --pkg <package> --func <name> --corpus <directory> --out <directory> [--write]`
+
+Generates offline same-package fuzz tests and benchmarks from a frozen Go fuzz
+v1 corpus. Accepts one non-generic, non-variadic package-level function with one
+argument exactly `string` or `[]byte`, including unexported functions. Requires
+a Go 1.24+ target toolchain. Returns are discarded; fuzz replay detects panics
+without inventing correctness properties or treating returned errors as failures.
+The caller must ensure determinism, no external state, and no mutation or
+retention of the input.
+
+The output directory receives self-contained code and a manifest recording
+target, generator version, seed origins and hashes. `--write` also installs the
+test in the target package; existing files and symbol conflicts are refused.
+This reporter has its own schema version **1** and no measurement object.
+`generated: true` with `validated: false` means generation succeeded, not that
+the seeds passed: generation never executes the target and needs no API key.
+
+Replay the generated `FuzzProfadvisor_<name>` seeds before measuring
+`BenchmarkProfadvisor_<name>`. Exploration via `go test -fuzz` is a separate user
+step. Import cache directories explicitly; never change the frozen corpus
+between baseline and after or select cases by speed. Commit the generated tests
+and manifest before `run`, which requires a clean tree. See the README for a
+complete example. There is no automatic integration with `run`.
+
 ### `profadvisor capture --pkg <pattern> [--dir <repo>] [--profile cpu|memory] [--bench <regexp>] [--count N]`
 
 Runs the benchmark once and writes a timestamped directory under

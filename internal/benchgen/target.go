@@ -1,0 +1,197 @@
+package benchgen
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"go/ast"
+	"go/importer"
+	"go/parser"
+	"go/token"
+	"go/types"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+)
+
+type listedPackage struct {
+	Dir, ImportPath, Name, Export                string
+	GoFiles, CgoFiles, TestGoFiles, XTestGoFiles []string
+	DepOnly                                      bool
+	Error                                        *struct{ Err string }
+}
+
+func resolveTarget(ctx context.Context, o Options) (Target, error) {
+	var target Target
+	if o.Function == "" || !token.IsIdentifier(o.Function) || o.Function == "_" {
+		return target, fmt.Errorf("--func must name a function")
+	}
+	dir := o.Dir
+	if dir == "" {
+		dir = "."
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return target, err
+	}
+	pattern := o.Package
+	if pattern == "" {
+		return target, fmt.Errorf("--pkg is required")
+	}
+	if strings.HasPrefix(pattern, "-") {
+		return target, fmt.Errorf("invalid package pattern")
+	}
+	versionCmd := exec.CommandContext(ctx, "go", "env", "GOVERSION")
+	versionCmd.Dir = abs
+	versionBytes, err := versionCmd.Output()
+	if err != nil {
+		return target, fmt.Errorf("resolve Go toolchain: %w", err)
+	}
+	version := strings.TrimSpace(string(versionBytes))
+	if !supportsLoop(version) {
+		return target, fmt.Errorf("benchgen requires Go 1.24 or newer; target uses %s", version)
+	}
+	cmd := exec.CommandContext(ctx, "go", "list", "-deps", "-export", "-json", pattern)
+	cmd.Dir = abs
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	if err != nil {
+		return target, fmt.Errorf("load target package: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	exports := map[string]string{}
+	var roots []listedPackage
+	dec := json.NewDecoder(bytes.NewReader(output))
+	for {
+		var p listedPackage
+		err := dec.Decode(&p)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return target, fmt.Errorf("decode go list: %w", err)
+		}
+		if p.Error != nil {
+			return target, fmt.Errorf("load package: %s", p.Error.Err)
+		}
+		exports[p.ImportPath] = p.Export
+		if !p.DepOnly {
+			roots = append(roots, p)
+		}
+	}
+	if len(roots) != 1 {
+		return target, fmt.Errorf("--pkg must resolve to exactly one package, got %d", len(roots))
+	}
+	p := roots[0]
+	if len(p.CgoFiles) > 0 {
+		return target, fmt.Errorf("packages using cgo are not supported")
+	}
+	fset := token.NewFileSet()
+	files := make([]*ast.File, 0, len(p.GoFiles))
+	fuzzName := "FuzzProfadvisor_" + o.Function
+	benchmarkName := "BenchmarkProfadvisor_" + o.Function
+	allFiles := append(append(append([]string{}, p.GoFiles...), p.TestGoFiles...), p.XTestGoFiles...)
+	for i, name := range allFiles {
+		file, err := parser.ParseFile(fset, filepath.Join(p.Dir, name), nil, 0)
+		if err != nil {
+			return target, fmt.Errorf("parse target: %w", err)
+		}
+		if i < len(p.GoFiles) {
+			files = append(files, file)
+		}
+		for _, decl := range file.Decls {
+			var names []string
+			switch d := decl.(type) {
+			case *ast.FuncDecl:
+				if d.Recv == nil {
+					names = append(names, d.Name.Name)
+				}
+			case *ast.GenDecl:
+				for _, spec := range d.Specs {
+					switch s := spec.(type) {
+					case *ast.TypeSpec:
+						names = append(names, s.Name.Name)
+					case *ast.ValueSpec:
+						for _, n := range s.Names {
+							names = append(names, n.Name)
+						}
+					}
+				}
+			}
+			for _, name := range names {
+				if name == fuzzName || name == benchmarkName {
+					return target, fmt.Errorf("generated symbol %s already exists", name)
+				}
+			}
+		}
+	}
+	imp := importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) {
+		archive := exports[path]
+		if archive == "" {
+			return nil, fmt.Errorf("no export data for %s", path)
+		}
+		return os.Open(archive)
+	})
+	conf := types.Config{Importer: imp}
+	pkg, err := conf.Check(p.ImportPath, fset, files, nil)
+	if err != nil {
+		return target, fmt.Errorf("type-check target: %w", err)
+	}
+	for _, name := range []string{"string", "byte"} {
+		if pkg.Scope().Lookup(name) != nil {
+			return target, fmt.Errorf("package shadows predeclared %s used by generated code", name)
+		}
+	}
+	testingAlias := "profadvisorTesting"
+	if o.Function == testingAlias {
+		testingAlias += "_"
+	}
+	if pkg.Scope().Lookup(testingAlias) != nil {
+		return target, fmt.Errorf("package symbol %s conflicts with generated testing import", testingAlias)
+	}
+	fn, ok := pkg.Scope().Lookup(o.Function).(*types.Func)
+	if !ok {
+		return target, fmt.Errorf("%s is not a package function", o.Function)
+	}
+	sig := fn.Type().(*types.Signature)
+	if sig.Recv() != nil || sig.TypeParams().Len() != 0 || sig.Variadic() || sig.Params().Len() != 1 {
+		return target, fmt.Errorf("function must be non-generic, non-variadic and accept one string or []byte argument")
+	}
+	input := ""
+	typ := sig.Params().At(0).Type()
+	if types.Identical(typ, types.Typ[types.String]) {
+		input = "string"
+	}
+	if types.Identical(typ, types.NewSlice(types.Typ[types.Byte])) {
+		input = "[]byte"
+	}
+	if input == "" {
+		return target, fmt.Errorf("function argument must be exactly string or []byte")
+	}
+	return Target{Dir: p.Dir, Package: p.ImportPath, Name: p.Name, Function: o.Function, InputType: input, GoVersion: version, FuzzName: fuzzName, BenchmarkName: benchmarkName}, nil
+}
+
+func supportsLoop(version string) bool {
+	if strings.HasPrefix(version, "devel ") {
+		version = strings.TrimPrefix(version, "devel ")
+	}
+	version = strings.TrimPrefix(version, "go")
+	major, rest, ok := strings.Cut(version, ".")
+	if !ok {
+		return false
+	}
+	end := 0
+	for end < len(rest) && rest[end] >= '0' && rest[end] <= '9' {
+		end++
+	}
+	a, err := strconv.Atoi(major)
+	if err != nil {
+		return false
+	}
+	b, err := strconv.Atoi(rest[:end])
+	return err == nil && (a > 1 || a == 1 && b >= 24)
+}
