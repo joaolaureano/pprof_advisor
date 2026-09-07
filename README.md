@@ -8,14 +8,13 @@ and benchmark output of that run.
 
 ## Scope
 
-It answers questions a benchmark can settle, over `go test -bench`: CPU time,
-memory allocation, and contention (block or mutex). Trace profiles are not
-covered. A target that waits on I/O, network, or databases will get a confident
-answer that means nothing.
+It reads CPU, allocation, block-contention and mutex-contention profiles over
+`go test -bench`. Trace profiles are not covered, and it captures no I/O,
+network or database latency — a target whose cost is there is profiled as
+though it were idle.
 
-A verdict comes from measurement, never from the model. `analyze` produces a
-hypothesis; only `verify`, comparing two benchmark outputs, decides whether a
-change was worth making.
+`analyze` produces a hypothesis. `verify` compares two benchmark outputs and is
+the only command that emits a verdict.
 
 ## Install
 
@@ -40,17 +39,16 @@ export PROFADVISOR_API_KEY=...
 
 `run` does capture → extract → analyze → apply → capture: it benchmarks the
 package, finds the hot functions, asks a model for a diff, applies it on a
-branch, and benchmarks again. It stops there, deliberately, and hands you the two
-benchmark outputs. Turning them into a verdict is a separate step:
+branch, and benchmarks again. It stops there and hands you the two benchmark
+outputs. Turning them into a verdict is a separate step:
 
 ```
 ./profadvisor verify --baseline <baseline bench.txt> --after <after bench.txt>
 ```
 
-That prints `MELHOROU`, `SEM DIFERENÇA`, or `PIOROU`, with a percentage delta and
-a p-value. A suggestion is only a success when this second measurement says so —
-the model's confidence is not evidence, and a rejected suggestion is a normal
-outcome rather than a malfunction.
+That prints `MELHOROU`, `SEM DIFERENÇA`, or `PIOROU`, with a percentage delta, a
+p-value and the sample counts. Nothing before this step measures anything; the
+model's `confidence` field is its own estimate. All three verdicts exit 0.
 
 ### Choosing what to optimize
 
@@ -70,11 +68,11 @@ verdict.
 ./profadvisor run --dir /path/to/your/repo --pkg ./internal/sync/ --profile block
 ```
 
-A memory run keeps `ns/op` as a guard, so a patch that saves bytes by spending
-time is rejected rather than celebrated. Contention runs are judged on `ns/op`
-too: recording every event adds overhead, so absolute numbers from a contention
-capture are not comparable to a clean run — but baseline and after use identical
-flags, so the verdict stays valid.
+A memory run carries `ns/op` as a guard: it can turn the roll-up into `PIOROU`
+but never into `MELHOROU`. Contention runs are judged on `ns/op` too. Recording
+every contention event adds overhead, so absolute numbers from a contention
+capture are not comparable to a clean run; baseline and after are captured with
+identical flags.
 
 ### Escape analysis, without a benchmark
 
@@ -85,10 +83,10 @@ compiler concluded about which values are heap-allocated.
 ./profadvisor escape --dir /path/to/your/repo
 ```
 
-**The compiler is the source of truth, and an escape is not a defect.** A heap
-allocation on a path that runs once costs nothing measurable. This command
-reports evidence; deciding that code should change still requires the loop above.
-There is no severity, no ranking, and no suggestion in the output, deliberately.
+The conclusions are the compiler's, reported as normalized JSON. There is no
+severity, no ranking, and no suggestion in the output. A heap allocation on a
+path that runs once costs nothing measurable, and this command measures
+nothing — that is what the loop above does.
 
 ### Reading the output
 
@@ -113,8 +111,7 @@ renders the same document for a person:
 | `benchgen` | Generates fuzz tests and benchmarks offline from a frozen corpus. |
 
 [AGENTS.md](AGENTS.md) is the full reference: every flag, the I/O contract, the
-schema versions, and what each verdict means. Read it before scripting against
-this tool.
+schema versions, and what each verdict means.
 
 ## Generating benchmarks
 
@@ -127,9 +124,8 @@ model, API key, or benchmark execution is involved.
   --func parse --corpus /path/to/seeds --out /path/to/artifacts --write
 ```
 
-Replay the seeds before measuring. The generated fuzz target **checks for panics
-and nothing else** — it will not notice a rewrite that returns the wrong answer,
-so correctness stays your job.
+The generated fuzz target checks for panics and nothing else: it passes
+unchanged when the function is edited to return a wrong answer.
 
 The corpus format, the accepted parameter types, interface selection, and the
 replay steps are in [AGENTS.md](AGENTS.md).

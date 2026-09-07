@@ -5,10 +5,9 @@ it, and
 then measures whether the fix actually worked. It optimizes CPU time, memory
 allocation, or contention (block or mutex), chosen per run.
 
-Agents should reach for this tool when someone asks *why* Go code is slow or
-allocation-heavy, or asks to make a CPU-bound or allocation-bound Go package
-faster. It is not a profiler viewer and not a general optimizer: it only answers
-questions a benchmark can settle.
+It answers questions a benchmark can settle: why a Go package is slow or
+allocation-heavy, and whether a given change improves it. It is not a profiler
+viewer and not a general optimizer.
 
 ## What it is pointed at
 
@@ -52,7 +51,7 @@ Do **not** use it when:
   `--profile mutex`.
 - There is no benchmark and the code cannot be exercised deterministically.
   Without a benchmark there is nothing to compare against, and the verdict step —
-  the only part that establishes a change was worth making — cannot run.
+  the only step that measures anything — cannot run.
 
 ## Choosing the objective
 
@@ -98,8 +97,7 @@ caused the wait, which is the line a patch can change.
 1. **Delay is time blocked, summed across goroutines.** Block and mutex profiles
    measure the sum of delays on all goroutines combined. In a contention trace
    from a worker pool, each blocked worker contributes its delay, so the total
-   routinely exceeds the benchmark's wall-clock time. That is not a bug in the
-   report.
+   routinely exceeds the benchmark's wall-clock time.
 
 2. **Focus inference can miss in concurrent code.** `extract` identifies the
    focus package from the `Benchmark*` frame in the profile. In a worker-pool
@@ -109,10 +107,9 @@ caused the wait, which is the line a patch can change.
 
 3. **Profiling overhead inflates the numbers.** Turning on block profiling with
    `-blockprofilerate=1` records every blocking event, which costs time and
-   inflates `ns/op`. Baseline and after are captured with identical flags so the
-   `MELHOROU` / `PIOROU` verdict stays valid, but the absolute numbers from a
-   contention capture are not comparable to a clean run. The `--rate` flag exists
-   to trade detail for overhead.
+   inflates `ns/op`. Baseline and after are captured with identical flags. The
+   absolute numbers from a contention capture are not comparable to a clean run.
+   `--rate` trades detail for overhead.
 
 ## Requirements
 
@@ -145,11 +142,11 @@ objective are pinned by golden files under `testdata/prompts/`.
 
 ## I/O contract
 
-Every subcommand follows the same rules, and tooling can rely on them:
+Every subcommand follows the same rules:
 
 - **stdout** carries the result, and carries nothing else. `--format` chooses
-  the rendering: `json` (the default, indented) or `text`. Agents should leave
-  it at `json`; `text` exists so a person can read the same document.
+  the rendering: `json` (the default, indented) or `text`. Both render the same
+  document; `text` is the human-readable form.
 - **stderr** carries every diagnostic, progress line, and error message.
 - **exit 0** means the tool worked and the document on stdout is complete.
   **exit 1** means it failed; the document is absent or partial — do not parse
@@ -162,8 +159,7 @@ now a field in a document and nothing else. See "Reporting and judging" below.
 Each document carries `schema_version`, currently **3**, with one exception:
 `capture` writes no version field. Its result is an artifact index — the two
 paths plus the `go` invocation — so do not branch on a version when reading it.
-A consumer that does not recognize a version it is given should stop rather than
-guess at the shape.
+The version changes when the shape of the document changes.
 
 `escape` is the exception, and deliberately so: its report carries
 `schema_version` **1** from a separate constant. The capture → extract → analyze
@@ -174,7 +170,7 @@ the toolchain rewords a line.
 
 ## Reporting and judging
 
-Two kinds of command, and it is worth knowing which you are holding:
+There are two kinds of command:
 
 **Reporters** — `capture`, `extract`, `analyze`, `apply`, `escape`, `run`. They
 produce a document describing what they found or did. None of them decides
@@ -188,17 +184,15 @@ diagnosis is a hypothesis.
 
 The verdict is not an opinion in the loose sense. The statistics are mechanical
 — `benchmath.AssumeNothing`, a non-parametric comparison — and the `p_value`,
-`delta_pct` and sample counts are all in the document, so you can ignore the
-roll-up and decide for yourself. What *is* a policy choice is exactly two
-things, both adjustable: the significance level (`--alpha`, default 0.05) and
-which metric plays which `role`, which follows from `--profile`/`--unit`. The
-roles are in the document; the alpha that produced them is not, so record the
-invocation alongside the result if you did not use the default.
+`delta_pct` and sample counts are all in the document, and the roll-up is
+derived from them. Two things are policy: the significance level (`--alpha`,
+default 0.05) and which metric plays which `role`, which follows from
+`--profile`/`--unit`. The roles appear in the document; the alpha that produced
+them does not.
 
 `run` therefore stops before judging. It captures, extracts, diagnoses,
 applies, and re-captures, then hands you the two `bench.txt` paths and the
-`verify` invocation that turns them into a verdict. Chaining it yourself is one
-line, and it keeps "what happened" separate from "was it worth it".
+`verify` invocation that turns them into a verdict.
 
 `capture`, `extract`, `analyze`, `verify` and `run` also carry a `measurement`
 object — profile, unit, pprof sample type, sample unit, and attribution rule. It
@@ -227,8 +221,8 @@ for example `int64(-42)` or `bool(true)`. A corpus file is one complete
 argument tuple. `uintptr` is not a native Go fuzz type and is refused.
 Requires a Go 1.24+ target toolchain. Returns are discarded; fuzz replay detects panics
 without inventing correctness properties or treating returned errors as failures.
-The caller must ensure determinism, no external state, and no mutation or
-retention of inputs.
+Generation does not check determinism, external state, or whether the function
+mutates or retains its arguments.
 
 **Interface parameters**: When a parameter has an interface type, `benchgen` selects a
 concrete local type that implements it. The interface may be declared anywhere — in
@@ -243,12 +237,13 @@ and override discovery. Both interface spellings are accepted: `--impl Reader=Ty
 for a local `Reader`, and `--impl io.Reader=Type` for an imported interface.
 The benchmark measures the chosen implementation, not "the interface": cost behind
 an interface call is entirely the implementation's. If the choice changes between
-two measurements, `verify` is comparing different programs and the artifact must say so.
+two measurements, `verify` is comparing different programs. The chosen type is
+recorded in the manifest's `implementations` field.
 
-The output directory receives a record — the generated code plus a build constraint
-that excludes it from compilation — alongside the manifest. This record is safe to
-commit anywhere in your repository, including inside the target module, because the
-build constraint prevents duplicate-symbol and orphan-package errors.
+The output directory receives a record — the generated code plus a build
+constraint that excludes it from compilation — alongside the manifest. Because
+the constraint keeps the file out of every build, committing it inside the
+target module produces no duplicate-symbol or orphan-package error.
 
 `--write` additionally installs the live test file into the target package, without
 any build constraint. That is the copy that runs when you execute the tests.
@@ -257,8 +252,8 @@ Generation refuses to proceed when the target package already declares
 `FuzzProfadvisor_<name>` or `BenchmarkProfadvisor_<name>`, or when the file it
 would install already exists. **This check runs even without `--write`**, so a
 second `--out`-only run against a package that still holds a previously
-installed copy fails rather than rewriting the record. Remove the installed file
-first if you want to regenerate.
+installed copy fails rather than rewriting the record. Deleting the installed
+file clears the conflict.
 
 This reporter has its own schema version **4** and no measurement object.
 `generated: true` with `validated: false` means generation succeeded, not that
@@ -269,9 +264,10 @@ as `"Interface=Type"` strings.
 
 Replay the generated `FuzzProfadvisor_<name>` seeds before measuring
 `BenchmarkProfadvisor_<name>`. Exploration via `go test -fuzz` is a separate user
-step. Import cache directories explicitly; never change the frozen corpus
-between baseline and after or select cases by speed. Commit the generated tests
-and manifest before `run`, which requires a clean tree. There is no automatic
+step. Cache directories are imported only when named explicitly. A corpus that
+differs between baseline and after produces two measurements of different
+inputs. `run` requires a clean tree, so the generated tests and manifest have to
+be committed first. There is no automatic
 integration with `run`.
 
 **Corpus format.** Each file holds one complete argument tuple: one value per
@@ -363,8 +359,7 @@ Runtime and standard-library frames are filtered out of the ranking. This is not
 cosmetic: in a short benchmark, idle netpoller threads alone can account for more
 than half the samples, and an unfiltered top-N reports `runtime.kevent` as the
 hot path while the code under test sits below the fold. Percentages are
-renormalized over what survives, and both totals are reported so you can see how
-much was set aside.
+renormalized over what survives, and both totals are reported.
 
 The focus — which package counts as "the code under test" — is taken from the
 package that defines the `Benchmark*` function in the profile. That is the
@@ -415,8 +410,7 @@ repeated runs accumulate branches rather than overwriting one. Use `--dir` to
 name that repository; it defaults to the current directory.
 
 **It leaves the repository checked out on the suggestion branch.** That differs
-from `run`, which returns you to the branch you started from. Check out your own
-branch again before running anything that assumes the original tree.
+from `run`, which returns the repository to the branch it started on.
 
 ### `profadvisor verify --baseline <bench.txt> --after <bench.txt> [--unit <unit>]`
 
@@ -446,18 +440,17 @@ it concluded, as normalized JSON. `--dir` is the target repository root and
 defaults to the current directory; `--pkg` may be repeated and defaults to
 `./...`. No binary is written into the target.
 
-**The compiler is the source of truth, and an escape is not a performance
-problem.** This command reports evidence and nothing else: there is no severity
-field, no ranking, and no suggestion. A heap allocation on a cold path costs
-nothing, and only a benchmark can say whether any of this matters — which is
-what the rest of this tool is for. Do not report an allocation here as a defect.
+The report contains evidence and nothing else: there is no severity field, no
+ranking, and no suggestion. The conclusions are the compiler's. A heap
+allocation on a cold path costs nothing measurable, and the report carries no
+measurement — what a finding costs is what the rest of this tool measures.
 
 Each finding carries a `kind` from a fixed vocabulary — `moved_to_heap`,
 `escapes_to_heap`, `does_not_escape`, `leaking_param`, `leaking_param_content`,
 `leaking_param_result`, `closure_capture`, and a few more — together with
-`evidence`, the compiler's own line, verbatim. Match on `kind`; never on
-`evidence`. Compiler diagnostic text is prose and has been reworded across
-releases, which is the entire reason the `kind` field exists.
+`evidence`, the compiler's own line, verbatim. `kind` is drawn from that fixed
+vocabulary and is stable across toolchains. `evidence` is compiler prose, which
+has been reworded between releases.
 
 `toolchain` records the compiler that reached these conclusions, down to the
 resolved binary path, and is not decoration: escape analysis improves between
@@ -500,8 +493,8 @@ That is a real record with one flow hop elided and the module path replaced. The
 bottom-up.
 
 **What "covers the vocabulary" means here.** Passing on a corpus only proves the
-parser handles what that corpus happened to provoke, which is a weak guarantee:
-three conclusions are gated behind a compiler debug flag, and the warning the
+parser handles what that corpus happened to provoke. Three conclusions are
+gated behind a compiler debug flag, and the warning the
 compiler prints when it abandons a flow at an assignment cycle appeared in
 neither the corpus nor a real nine-package service with 5868 diagnostic lines.
 So the inventory is transcribed from the format strings in
@@ -514,8 +507,8 @@ tool fixes `-m=2`.
 
 That inventory is a snapshot of one release. A newer toolchain than the parser
 was validated against is reported in `warnings` and still parsed, and anything
-genuinely new lands in `unrecognized` — the guarantee is that a gap announces
-itself, not that gaps cannot happen.
+genuinely new lands in `unrecognized` and is counted, so a gap appears in the
+document rather than being dropped from it.
 
 Not every finding is in a file you can edit. The compiler re-analyzes inlined
 bodies in the context of the package that inlined them, and it analyzes the
@@ -561,7 +554,5 @@ it. Once you do:
   the `ns/op` guard with the objective improving means the model bought memory
   with time, and is worth re-running with a narrower `--bench`.
 
-All three exit 0. The verdict is in the document, and a regression is a
-finding, not a failure of the tool.
-
-Do not report an optimization as done on the strength of the diagnosis alone.
+All three exit 0. The verdict is a field in the document; a regression is a
+result, not a tool failure. Nothing before `verify` measures anything.
