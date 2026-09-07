@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/joaolaureano/profadvisor/internal/benchgen"
 	"github.com/joaolaureano/profadvisor/internal/capture"
 	"github.com/joaolaureano/profadvisor/internal/escape"
 	"github.com/joaolaureano/profadvisor/internal/extract"
@@ -324,5 +325,75 @@ func TestTextRejectsAnUnknownDocument(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "int") {
 		t.Errorf("error does not name the offending type: %v", err)
+	}
+}
+
+// TestTextBenchgenWithImplementations asserts that Implementations line is rendered when present.
+func TestTextBenchgenWithImplementations(t *testing.T) {
+	r := &benchgen.Result{
+		SchemaVersion: 4,
+		Manifest: benchgen.Manifest{
+			SchemaVersion:    4,
+			GeneratorVersion: "4",
+			Target: benchgen.Target{
+				Package:         "mypackage",
+				Function:        "myFunc",
+				ArgumentTypes:   []string{"Reader", "Writer"},
+				InputTypes:      []string{"[]byte"},
+				Implementations: []string{"Reader=MyReader", "Writer=MyWriter"},
+				GoVersion:       "go1.24",
+				FuzzName:        "FuzzMyFunc",
+				BenchmarkName:   "BenchmarkMyFunc",
+			},
+			CorpusHash: "abc123",
+			CodeHash:   "def456",
+			Seeds:      []benchgen.Seed{{Hash: "h1"}},
+		},
+		CodePath:     "/tmp/code.go",
+		ManifestPath: "/tmp/manifest.json",
+		Generated:    true,
+		Validated:    false,
+	}
+	got, err := Text(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "Implementations: Reader=MyReader, Writer=MyWriter") {
+		t.Fatalf("got does not contain Implementations line.\ngot:\n%s", got)
+	}
+}
+
+// TestTextBenchgenWithoutImplementations asserts that Implementations line is NOT rendered when absent.
+func TestTextBenchgenWithoutImplementations(t *testing.T) {
+	r := &benchgen.Result{
+		SchemaVersion: 4,
+		Manifest: benchgen.Manifest{
+			SchemaVersion:    4,
+			GeneratorVersion: "4",
+			Target: benchgen.Target{
+				Package:         "mypackage",
+				Function:        "myFunc",
+				ArgumentTypes:   []string{"string"},
+				InputTypes:      []string{"string"},
+				Implementations: []string{},
+				GoVersion:       "go1.24",
+				FuzzName:        "FuzzMyFunc",
+				BenchmarkName:   "BenchmarkMyFunc",
+			},
+			CorpusHash: "abc123",
+			CodeHash:   "def456",
+			Seeds:      []benchgen.Seed{{Hash: "h1"}},
+		},
+		CodePath:     "/tmp/code.go",
+		ManifestPath: "/tmp/manifest.json",
+		Generated:    true,
+		Validated:    false,
+	}
+	got, err := Text(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got, "Implementations") {
+		t.Fatalf("got contains Implementations line when it should not.\ngot:\n%s", got)
 	}
 }

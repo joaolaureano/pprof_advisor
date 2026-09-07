@@ -55,6 +55,109 @@ document yourself instead:
 See [AGENTS.md](AGENTS.md) for the full command reference and the I/O contract.
 That file is what both humans and agents should read first.
 
+## Generate benchmarks and fuzz tests offline
+
+`benchgen` turns a frozen directory of Go fuzz corpus files into a self-contained
+`_test.go` file and a manifest. It uses native Go fuzzing and fixed templates;
+no model, API key, or benchmark execution is involved in generation.
+
+Each corpus file contains one value per parameter, in the function's parameter
+order. A function with one primitive parameter therefore has one corpus value:
+
+```text
+go test fuzz v1
+string("example")
+```
+
+For a `[]byte` parameter, use `[]byte("example\\x00\\xff")` instead of
+`string("example")`. Scalar parameters use an explicit conversion too, such as
+`int64(-42)`, `bool(true)`, or `float64(1.5)`. Struct arguments contribute one
+line for each supported leaf field in declaration order, recursively. A function
+taking `string`, `int64`, and `bool` has three lines after the header. Pass the directory
+containing these files explicitly. The native special-float forms `NaN`, `+Inf`,
+`-Inf`, and `math.Float32frombits`/`math.Float64frombits` are also accepted:
+
+```sh
+./profadvisor benchgen --dir /path/to/repo --pkg ./internal/parser \
+  --func parse --corpus /path/to/seeds --out /path/to/artifacts --write
+```
+
+One execution handles one package-level function, including unexported functions.
+It must be non-generic and non-variadic. Arguments may be native Go fuzz types:
+`string`, `[]byte`, `bool`, `int`, `int8`, `int16`, `int32` (including `rune`),
+`int64`, `uint`, `uint8` (including `byte`), `uint16`, `uint32`, `uint64`,
+`float32`, or `float64`; or local structs composed recursively of those types,
+or named interfaces declared anywhere (standard library or local).
+Struct fields are flattened into native fuzz inputs and rebuilt with keyed
+composite literals before each target call. For interface parameters, the concrete
+implementation must be declared locally; the interface is used to discover which
+local types implement it. `uintptr`, pointers, maps, arbitrary slices, external
+structs, blank fields, empty-only structs, defined scalar types, anonymous interfaces,
+`any`/`interface{}`, and cycles are not accepted.
+Return values, including errors, are discarded. Methods and custom setup are
+unsupported, as are packages using cgo. The target must use a Go 1.24+ toolchain
+for `b.Loop()`.
+The function must be deterministic, independent of external state, and must
+neither modify nor retain its arguments. These are caller obligations; generation
+cannot prove them.
+
+When a parameter is an interface, `benchgen` automatically selects a concrete local
+type that implements it. If exactly one such type exists and can be flattened into
+native fuzz types, that type is instantiated: with a value receiver as `T{...}` or
+with a pointer receiver as `&T{...}`. If multiple candidates remain after filtering
+out non-flattenable types, generation fails and lists them; use `--impl Interface=Type`
+(repeatable) to select one explicitly. Both interface spellings work: `--impl Reader=Type`
+for a local `Reader`, and `--impl io.Reader=Type` for an imported interface.
+The benchmark measures the chosen implementation, not "the interface": the cost
+behind an interface call is entirely the implementation's cost. A change in which
+type is chosen between two measurements means `verify` is comparing different
+programs.
+
+The generated `FuzzProfadvisor_parse` embeds each unique tuple with `f.Add`.
+It detects panics; it defines no additional correctness property. The generated
+`BenchmarkProfadvisor_parse` has one sub-benchmark per seed, named by its SHA256.
+Inputs are prepared before `b.Loop()`, allocations are reported, and the measured
+loop calls the function directly. No fuzzing or random input generation occurs
+inside the benchmark.
+
+`--out` receives a record — the generated code plus a build constraint that excludes
+it from compilation — alongside the manifest. This record is safe to commit
+anywhere in your repository, including inside the target module, because the build
+constraint prevents duplicate-symbol and orphan-package errors.
+
+`--write` additionally installs the live test file into the target package, without
+any build constraint. That is the copy that runs when you execute
+`go test ./internal/parser`. Existing files and conflicting symbols are refused.
+
+The JSON report and manifest use their own `schema_version: 4`; `argument_types`
+records the target signature and `input_types` records the flattened fuzz values.
+Version 4 added support for interface parameters and includes an `implementations`
+field listing which concrete type was instantiated for each interface parameter,
+as `"Interface=Type"` strings. This is critical information: the benchmark measures
+that specific type, not "the interface".
+The report says
+`generated: true` and `validated: false` because the target has not been executed.
+Use `--format text` for a readable report. Diagnostics use stderr and exits are
+0 for success or 1 for failure, as with the other commands.
+
+Replay seeds before measuring, from the target repository:
+
+```sh
+go test ./internal/parser -run '^FuzzProfadvisor_parse$'
+go test ./internal/parser -run '^$' -bench '^BenchmarkProfadvisor_parse$' -benchmem -count 10
+# Optional exploration, separate from measurement:
+go test ./internal/parser -run '^$' -fuzz '^FuzzProfadvisor_parse$' -fuzztime 30s
+```
+
+You may explicitly import a selected directory from Go's fuzz cache as `--corpus`.
+Coverage discoveries reside in that cache; `testdata/fuzz` may also contain inputs
+that caused failures. Inspect and replay imported seeds. Each generation freezes
+the selected corpus: it does not follow the cache or choose inputs by speed.
+Keep identical generated code and corpus hashes for baseline and after runs.
+Version the test and manifest before using `run`, which requires a clean git
+tree. `benchgen` is not automatically invoked by `run`; measurement and `verify`
+remain separate steps.
+
 ## Providers
 
 The tool has no built-in vendor. `internal/analyze` builds a request in neutral

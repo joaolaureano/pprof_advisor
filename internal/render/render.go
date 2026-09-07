@@ -11,6 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/joaolaureano/profadvisor/internal/benchgen"
 	"github.com/joaolaureano/profadvisor/internal/capture"
 	"github.com/joaolaureano/profadvisor/internal/measurement"
 	"github.com/joaolaureano/profadvisor/internal/pipeline"
@@ -22,6 +23,13 @@ import (
 // Unknown types return an error naming the type.
 func Text(v any) (string, error) {
 	switch v := v.(type) {
+	case *benchgen.Result:
+		if v == nil {
+			return "", fmt.Errorf("Text: cannot render nil *benchgen.Result")
+		}
+		return textBenchgen(v), nil
+	case benchgen.Result:
+		return textBenchgen(&v), nil
 	case *capture.Result:
 		if v == nil {
 			return "", fmt.Errorf("Text: cannot render nil *capture.Result")
@@ -74,6 +82,23 @@ func Text(v any) (string, error) {
 	default:
 		return "", fmt.Errorf("Text: unsupported type %T", v)
 	}
+}
+
+func textBenchgen(r *benchgen.Result) string {
+	var b strings.Builder
+	argumentTypes := r.Manifest.Target.ArgumentTypes
+	if len(argumentTypes) == 0 {
+		argumentTypes = r.Manifest.Target.InputTypes
+	}
+	fmt.Fprintf(&b, "Benchmark generation\n  Schema version: %d\n  Target: %s.%s (%s)\n  Fuzz inputs: %s\n  Seeds: %d\n  Corpus SHA256: %s\n  Code: %s\n  Manifest: %s\n", r.SchemaVersion, r.Manifest.Target.Package, r.Manifest.Target.Function, strings.Join(argumentTypes, ", "), strings.Join(r.Manifest.Target.InputTypes, ", "), len(r.Manifest.Seeds), r.Manifest.CorpusHash, r.CodePath, r.ManifestPath)
+	if len(r.Manifest.Target.Implementations) > 0 {
+		fmt.Fprintf(&b, "  Implementations: %s\n", strings.Join(r.Manifest.Target.Implementations, ", "))
+	}
+	if r.InstalledPath != "" {
+		fmt.Fprintf(&b, "  Installed: %s\n", r.InstalledPath)
+	}
+	fmt.Fprintf(&b, "  Generated: %t\n  Validated: %t\nReplay the seeds before measuring; generation does not execute the target.\n", r.Generated, r.Validated)
+	return b.String()
 }
 
 // textPipeline renders the record of a run: the artifacts each stage produced,
