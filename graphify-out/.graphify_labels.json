@@ -1,5 +1,5 @@
 {
-  "0": "FromReaders",
+  "0": "Run",
   "1": "modelFlags",
   "2": "profadvisor",
   "3": "Run",
@@ -9,7 +9,7 @@
   "7": "Run",
   "8": "table",
   "9": "providers.go",
-  "10": "buildUserPrompt",
+  "10": "Catalog",
   "11": "example.com/profadvisor/fixture",
   "12": "github.com/joaolaureano/profadvisor",
   "13": "Run",

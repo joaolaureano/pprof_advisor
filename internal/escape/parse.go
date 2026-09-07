@@ -54,6 +54,7 @@ func Parse(stderr []byte, toolchainVersion string) (*Result, error) {
 	// Track unique packages and files.
 	seenPackages := make(map[string]bool)
 	seenFiles := make(map[string]bool)
+	truncated := 0
 
 	// Parse line by line.
 	lines := bytes.Split(stderr, []byte("\n"))
@@ -109,9 +110,12 @@ func Parse(stderr []byte, toolchainVersion string) (*Result, error) {
 		// Check for flow continuation.
 		if isFlowContinuation(rest) {
 			if pending, ok := pendingBlocks[posKey]; ok {
-				// Parse the flow step.
-				step := parseFlowStep(rest, file)
-				if step != nil {
+				if strings.HasPrefix(rest, truncatedExplanation) {
+					// The flow above this line stops early. Recording the count
+					// matters because the alternative is a consumer reading a
+					// partial explanation as a complete one.
+					truncated++
+				} else if step := parseFlowStep(rest, file); step != nil {
 					pending.Flow = append(pending.Flow, *step)
 				}
 				r.Ignored++
@@ -175,6 +179,10 @@ func Parse(stderr []byte, toolchainVersion string) (*Result, error) {
 		})
 	}
 
+	if truncated > 0 {
+		r.Warnings = append(r.Warnings, fmt.Sprintf(
+			"escape: the compiler truncated %d flow explanation(s) at an assignment cycle; those findings are correct but their flow is partial", truncated))
+	}
 	return r, nil
 }
 
@@ -214,10 +222,20 @@ func parsePosition(s string) (file string, line, col int, rest string, ok bool) 
 	return "", 0, 0, "", false
 }
 
-// isFlowContinuation checks if the message is a flow continuation line.
-// Flow lines have 3 leading spaces followed by "flow: " or 5 leading spaces followed by "from ".
+// truncatedExplanation is what the compiler prints in place of the rest of a
+// flow when it finds an assignment cycle. It is a continuation line, not a
+// diagnostic of its own, and it means the flow above it is incomplete.
+const truncatedExplanation = "  warning: truncated explanation due to assignment cycle"
+
+// isFlowContinuation reports whether the message continues an open explanation
+// block rather than starting something new.
+//
+// The compiler indents these relative to the position prefix: two spaces for the
+// "flow:" header that states an edge, four for each "from" hop along it.
 func isFlowContinuation(s string) bool {
-	return strings.HasPrefix(s, "  flow: ") || strings.HasPrefix(s, "    from ")
+	return strings.HasPrefix(s, "  flow: ") ||
+		strings.HasPrefix(s, "    from ") ||
+		strings.HasPrefix(s, truncatedExplanation)
 }
 
 // parseFlowStep extracts a flow step from a line starting with "flow: " or "from ".

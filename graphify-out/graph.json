@@ -4,257 +4,70 @@
   "graph": {},
   "nodes": [
     {
-      "id": "go_type_io_reader",
-      "label": "io.Reader",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "FromReaders",
-      "file_type": "code",
-      "norm_label": "io.reader",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "internal_schema_schema_go_schema_benchcomparison",
-      "label": "BenchComparison",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "FromReaders",
-      "file_type": "code",
-      "norm_label": "benchcomparison",
-      "source_file": "internal/schema/schema.go",
-      "source_location": "L187"
-    },
-    {
-      "id": "internal_schema_schema_go_schema_verifyresult",
-      "label": "VerifyResult",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "FromReaders",
-      "file_type": "code",
-      "norm_label": "verifyresult",
-      "source_file": "internal/schema/schema.go",
-      "source_location": "L171"
-    },
-    {
-      "id": "internal_verify_verify",
-      "label": "verify/verify.go",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "FromReaders",
-      "file_type": "code",
-      "norm_label": "verify/verify.go",
-      "source_file": "internal/verify/verify.go",
-      "source_location": "L1"
-    },
-    {
-      "id": "internal_verify_verify_compare",
-      "label": "compare()",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "FromReaders",
-      "file_type": "code",
-      "norm_label": "compare()",
-      "source_file": "internal/verify/verify.go",
-      "source_location": "L203"
-    },
-    {
-      "id": "internal_verify_verify_finitepvalue",
-      "label": "finitePValue()",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "FromReaders",
-      "file_type": "code",
-      "norm_label": "finitepvalue()",
-      "source_file": "internal/verify/verify.go",
-      "source_location": "L257"
-    },
-    {
-      "id": "internal_verify_verify_fromfiles",
-      "label": "FromFiles()",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "FromReaders",
-      "file_type": "code",
-      "norm_label": "fromfiles()",
-      "source_file": "internal/verify/verify.go",
-      "source_location": "L34"
-    },
-    {
-      "id": "internal_verify_verify_fromreaders",
-      "label": "FromReaders()",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "FromReaders",
-      "file_type": "code",
-      "norm_label": "fromreaders()",
-      "source_file": "internal/verify/verify.go",
-      "source_location": "L52"
-    },
-    {
-      "id": "internal_verify_verify_go_verify_options",
+      "id": "benchmark_options",
       "label": "Options",
       "_origin": "ast",
       "community": 0,
-      "community_name": "FromReaders",
+      "community_name": "Run",
       "file_type": "code",
       "norm_label": "options",
-      "source_file": "internal/verify/verify.go",
-      "source_location": "L25"
+      "source_file": "internal/benchmark/benchmark.go",
+      "source_location": "L21"
     },
     {
-      "id": "internal_verify_verify_readbenchmarks",
-      "label": "readBenchmarks()",
+      "id": "benchmark_result",
+      "label": "Result",
       "_origin": "ast",
       "community": 0,
-      "community_name": "FromReaders",
+      "community_name": "Run",
       "file_type": "code",
-      "norm_label": "readbenchmarks()",
-      "source_file": "internal/verify/verify.go",
-      "source_location": "L161"
+      "norm_label": "result",
+      "source_file": "internal/benchmark/benchmark.go",
+      "source_location": "L33"
     },
     {
-      "id": "internal_verify_verify_test",
-      "label": "verify_test.go",
+      "id": "internal_benchmark_benchmark",
+      "label": "benchmark.go",
       "_origin": "ast",
       "community": 0,
-      "community_name": "FromReaders",
+      "community_name": "Run",
       "file_type": "code",
-      "norm_label": "verify_test.go",
-      "source_file": "internal/verify/verify_test.go",
+      "norm_label": "benchmark.go",
+      "source_file": "internal/benchmark/benchmark.go",
       "source_location": "L1"
     },
     {
-      "id": "internal_verify_verify_test_comparefixtures",
-      "label": "compareFixtures()",
+      "id": "internal_benchmark_benchmark_run",
+      "label": "Run()",
       "_origin": "ast",
       "community": 0,
-      "community_name": "FromReaders",
+      "community_name": "Run",
       "file_type": "code",
-      "norm_label": "comparefixtures()",
-      "source_file": "internal/verify/verify_test.go",
-      "source_location": "L134"
+      "norm_label": "run()",
+      "source_file": "internal/benchmark/benchmark.go",
+      "source_location": "L42"
     },
     {
-      "id": "internal_verify_verify_test_objectives",
-      "label": "objectives()",
+      "id": "internal_benchmark_cancel_unix_test",
+      "label": "cancel_unix_test.go",
       "_origin": "ast",
       "community": 0,
-      "community_name": "FromReaders",
+      "community_name": "Run",
       "file_type": "code",
-      "norm_label": "objectives()",
-      "source_file": "internal/verify/verify_test.go",
-      "source_location": "L19"
+      "norm_label": "cancel_unix_test.go",
+      "source_file": "internal/benchmark/cancel_unix_test.go",
+      "source_location": "L1"
     },
     {
-      "id": "internal_verify_verify_test_testdeterministicorder",
-      "label": "TestDeterministicOrder()",
+      "id": "internal_benchmark_cancel_unix_test_testruncancellationkillsrunningtestprocess",
+      "label": "TestRunCancellationKillsRunningTestProcess()",
       "_origin": "ast",
       "community": 0,
-      "community_name": "FromReaders",
+      "community_name": "Run",
       "file_type": "code",
-      "norm_label": "testdeterministicorder()",
-      "source_file": "internal/verify/verify_test.go",
-      "source_location": "L121"
-    },
-    {
-      "id": "internal_verify_verify_test_testemptyinputiserror",
-      "label": "TestEmptyInputIsError()",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "FromReaders",
-      "file_type": "code",
-      "norm_label": "testemptyinputiserror()",
-      "source_file": "internal/verify/verify_test.go",
-      "source_location": "L114"
-    },
-    {
-      "id": "internal_verify_verify_test_testfasterisimproved",
-      "label": "TestFasterIsImproved()",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "FromReaders",
-      "file_type": "code",
-      "norm_label": "testfasterisimproved()",
-      "source_file": "internal/verify/verify_test.go",
-      "source_location": "L29"
-    },
-    {
-      "id": "internal_verify_verify_test_testfixturesexist",
-      "label": "TestFixturesExist()",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "FromReaders",
-      "file_type": "code",
-      "norm_label": "testfixturesexist()",
-      "source_file": "internal/verify/verify_test.go",
-      "source_location": "L143"
-    },
-    {
-      "id": "internal_verify_verify_test_testmissingbenchmarkwarns",
-      "label": "TestMissingBenchmarkWarns()",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "FromReaders",
-      "file_type": "code",
-      "norm_label": "testmissingbenchmarkwarns()",
-      "source_file": "internal/verify/verify_test.go",
-      "source_location": "L96"
-    },
-    {
-      "id": "internal_verify_verify_test_testregressionwinsoverimprovement",
-      "label": "TestRegressionWinsOverImprovement()",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "FromReaders",
-      "file_type": "code",
-      "norm_label": "testregressionwinsoverimprovement()",
-      "source_file": "internal/verify/verify_test.go",
-      "source_location": "L68"
-    },
-    {
-      "id": "internal_verify_verify_test_testsameisnochange",
-      "label": "TestSameIsNoChange()",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "FromReaders",
-      "file_type": "code",
-      "norm_label": "testsameisnochange()",
-      "source_file": "internal/verify/verify_test.go",
-      "source_location": "L56"
-    },
-    {
-      "id": "internal_verify_verify_test_testsinglesampledoesnotclaimsignificance",
-      "label": "TestSingleSampleDoesNotClaimSignificance()",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "FromReaders",
-      "file_type": "code",
-      "norm_label": "testsinglesampledoesnotclaimsignificance()",
-      "source_file": "internal/verify/verify_test.go",
-      "source_location": "L84"
-    },
-    {
-      "id": "internal_verify_verify_test_testslowerisregressed",
-      "label": "TestSlowerIsRegressed()",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "FromReaders",
-      "file_type": "code",
-      "norm_label": "testslowerisregressed()",
-      "source_file": "internal/verify/verify_test.go",
-      "source_location": "L44"
-    },
-    {
-      "id": "internal_verify_verify_warningstrings",
-      "label": "warningStrings()",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "FromReaders",
-      "file_type": "code",
-      "norm_label": "warningstrings()",
-      "source_file": "internal/verify/verify.go",
-      "source_location": "L245"
+      "norm_label": "testruncancellationkillsrunningtestprocess()",
+      "source_file": "internal/benchmark/cancel_unix_test.go",
+      "source_location": "L17"
     },
     {
       "id": "analyze_fakeclient",
@@ -800,7 +613,7 @@
       "label": "render",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": "render",
       "source_file": "internal/analyze/prompt.go",
@@ -811,7 +624,7 @@
       "label": ".done()",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": ".done()",
       "source_file": "internal/analyze/prompt.go",
@@ -822,7 +635,7 @@
       "label": ".put()",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": ".put()",
       "source_file": "internal/analyze/prompt.go",
@@ -833,7 +646,7 @@
       "label": ".raw()",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": ".raw()",
       "source_file": "internal/analyze/prompt.go",
@@ -844,7 +657,7 @@
       "label": "strings.Builder",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": "strings.builder",
       "source_file": "",
@@ -855,7 +668,7 @@
       "label": "analyze/prompt.go",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": "analyze/prompt.go",
       "source_file": "internal/analyze/prompt.go",
@@ -866,7 +679,7 @@
       "label": "buildUserPrompt()",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": "builduserprompt()",
       "source_file": "internal/analyze/prompt.go",
@@ -877,7 +690,7 @@
       "label": "bytesCost()",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": "bytescost()",
       "source_file": "internal/analyze/prompt.go",
@@ -888,7 +701,7 @@
       "label": "coster()",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": "coster()",
       "source_file": "internal/analyze/prompt.go",
@@ -899,7 +712,7 @@
       "label": "dec1()",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": "dec1()",
       "source_file": "internal/analyze/prompt.go",
@@ -910,7 +723,7 @@
       "label": "prompt_golden_test.go",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": "prompt_golden_test.go",
       "source_file": "internal/analyze/prompt_golden_test.go",
@@ -921,7 +734,7 @@
       "label": "compareGolden()",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": "comparegolden()",
       "source_file": "internal/analyze/prompt_golden_test.go",
@@ -932,7 +745,7 @@
       "label": "TestPromptsMatchGolden()",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": "testpromptsmatchgolden()",
       "source_file": "internal/analyze/prompt_golden_test.go",
@@ -943,7 +756,7 @@
       "label": "nanos()",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": "nanos()",
       "source_file": "internal/analyze/prompt.go",
@@ -954,7 +767,7 @@
       "label": "pct()",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": "pct()",
       "source_file": "internal/analyze/prompt.go",
@@ -965,7 +778,7 @@
       "label": "systemPrompt()",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": "systemprompt()",
       "source_file": "internal/analyze/prompt.go",
@@ -976,7 +789,7 @@
       "label": "trimShape()",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": "trimshape()",
       "source_file": "internal/analyze/prompt.go",
@@ -987,7 +800,7 @@
       "label": "shape_test.go",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": "shape_test.go",
       "source_file": "internal/analyze/shape_test.go",
@@ -998,11 +811,88 @@
       "label": "TestTrimShape()",
       "_origin": "ast",
       "community": 10,
-      "community_name": "buildUserPrompt",
+      "community_name": "Catalog",
       "file_type": "code",
       "norm_label": "testtrimshape()",
       "source_file": "internal/analyze/shape_test.go",
       "source_location": "L5"
+    },
+    {
+      "id": "internal_prompt_prompt",
+      "label": "prompt/prompt.go",
+      "_origin": "ast",
+      "community": 10,
+      "community_name": "Catalog",
+      "file_type": "code",
+      "norm_label": "prompt/prompt.go",
+      "source_file": "internal/prompt/prompt.go",
+      "source_location": "L1"
+    },
+    {
+      "id": "internal_prompt_prompt_extractplaceholders",
+      "label": "extractPlaceholders()",
+      "_origin": "ast",
+      "community": 10,
+      "community_name": "Catalog",
+      "file_type": "code",
+      "norm_label": "extractplaceholders()",
+      "source_file": "internal/prompt/prompt.go",
+      "source_location": "L135"
+    },
+    {
+      "id": "internal_prompt_prompt_go_prompt_catalog",
+      "label": "Catalog",
+      "_origin": "ast",
+      "community": 10,
+      "community_name": "Catalog",
+      "file_type": "code",
+      "norm_label": "catalog",
+      "source_file": "internal/prompt/prompt.go",
+      "source_location": "L14"
+    },
+    {
+      "id": "internal_prompt_prompt_load_5dbc71",
+      "label": "load()",
+      "_origin": "ast",
+      "community": 10,
+      "community_name": "Catalog",
+      "file_type": "code",
+      "norm_label": "load()",
+      "source_file": "internal/prompt/prompt.go",
+      "source_location": "L44"
+    },
+    {
+      "id": "prompt_catalog_keys",
+      "label": ".Keys()",
+      "_origin": "ast",
+      "community": 10,
+      "community_name": "Catalog",
+      "file_type": "code",
+      "norm_label": ".keys()",
+      "source_file": "internal/prompt/prompt.go",
+      "source_location": "L196"
+    },
+    {
+      "id": "prompt_catalog_render",
+      "label": ".Render()",
+      "_origin": "ast",
+      "community": 10,
+      "community_name": "Catalog",
+      "file_type": "code",
+      "norm_label": ".render()",
+      "source_file": "internal/prompt/prompt.go",
+      "source_location": "L151"
+    },
+    {
+      "id": "prompt_entry",
+      "label": "entry",
+      "_origin": "ast",
+      "community": 10,
+      "community_name": "Catalog",
+      "file_type": "code",
+      "norm_label": "entry",
+      "source_file": "internal/prompt/prompt.go",
+      "source_location": "L19"
     },
     {
       "id": "pkg_example_com_profadvisor_fixture",
@@ -1040,6 +930,17 @@
       "norm_label": "options",
       "source_file": "internal/escape/escape.go",
       "source_location": "L17"
+    },
+    {
+      "id": "go_type_time_duration",
+      "label": "time.Duration",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "Run",
+      "file_type": "code",
+      "norm_label": "time.duration",
+      "source_file": "",
+      "source_location": ""
     },
     {
       "id": "internal_escape_escape",
@@ -1493,39 +1394,6 @@
       "source_location": "L214"
     },
     {
-      "id": "internal_prompt_prompt",
-      "label": "prompt/prompt.go",
-      "_origin": "ast",
-      "community": 14,
-      "community_name": "testing.T",
-      "file_type": "code",
-      "norm_label": "prompt/prompt.go",
-      "source_file": "internal/prompt/prompt.go",
-      "source_location": "L1"
-    },
-    {
-      "id": "internal_prompt_prompt_extractplaceholders",
-      "label": "extractPlaceholders()",
-      "_origin": "ast",
-      "community": 14,
-      "community_name": "testing.T",
-      "file_type": "code",
-      "norm_label": "extractplaceholders()",
-      "source_file": "internal/prompt/prompt.go",
-      "source_location": "L135"
-    },
-    {
-      "id": "internal_prompt_prompt_go_prompt_catalog",
-      "label": "Catalog",
-      "_origin": "ast",
-      "community": 14,
-      "community_name": "testing.T",
-      "file_type": "code",
-      "norm_label": "catalog",
-      "source_file": "internal/prompt/prompt.go",
-      "source_location": "L14"
-    },
-    {
       "id": "internal_prompt_prompt_load",
       "label": "Load()",
       "_origin": "ast",
@@ -1535,17 +1403,6 @@
       "norm_label": "load()",
       "source_file": "internal/prompt/prompt.go",
       "source_location": "L30"
-    },
-    {
-      "id": "internal_prompt_prompt_load_5dbc71",
-      "label": "load()",
-      "_origin": "ast",
-      "community": 14,
-      "community_name": "testing.T",
-      "file_type": "code",
-      "norm_label": "load()",
-      "source_file": "internal/prompt/prompt.go",
-      "source_location": "L44"
     },
     {
       "id": "internal_prompt_prompt_loadfile",
@@ -1757,37 +1614,136 @@
       "source_location": "L370"
     },
     {
-      "id": "prompt_catalog_keys",
-      "label": ".Keys()",
+      "id": "internal_verify_verify_test",
+      "label": "verify_test.go",
       "_origin": "ast",
       "community": 14,
       "community_name": "testing.T",
       "file_type": "code",
-      "norm_label": ".keys()",
-      "source_file": "internal/prompt/prompt.go",
-      "source_location": "L196"
+      "norm_label": "verify_test.go",
+      "source_file": "internal/verify/verify_test.go",
+      "source_location": "L1"
     },
     {
-      "id": "prompt_catalog_render",
-      "label": ".Render()",
+      "id": "internal_verify_verify_test_comparefixtures",
+      "label": "compareFixtures()",
       "_origin": "ast",
       "community": 14,
       "community_name": "testing.T",
       "file_type": "code",
-      "norm_label": ".render()",
-      "source_file": "internal/prompt/prompt.go",
-      "source_location": "L151"
+      "norm_label": "comparefixtures()",
+      "source_file": "internal/verify/verify_test.go",
+      "source_location": "L134"
     },
     {
-      "id": "prompt_entry",
-      "label": "entry",
+      "id": "internal_verify_verify_test_objectives",
+      "label": "objectives()",
       "_origin": "ast",
       "community": 14,
       "community_name": "testing.T",
       "file_type": "code",
-      "norm_label": "entry",
-      "source_file": "internal/prompt/prompt.go",
+      "norm_label": "objectives()",
+      "source_file": "internal/verify/verify_test.go",
       "source_location": "L19"
+    },
+    {
+      "id": "internal_verify_verify_test_testdeterministicorder",
+      "label": "TestDeterministicOrder()",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "testdeterministicorder()",
+      "source_file": "internal/verify/verify_test.go",
+      "source_location": "L121"
+    },
+    {
+      "id": "internal_verify_verify_test_testemptyinputiserror",
+      "label": "TestEmptyInputIsError()",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "testemptyinputiserror()",
+      "source_file": "internal/verify/verify_test.go",
+      "source_location": "L114"
+    },
+    {
+      "id": "internal_verify_verify_test_testfasterisimproved",
+      "label": "TestFasterIsImproved()",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "testfasterisimproved()",
+      "source_file": "internal/verify/verify_test.go",
+      "source_location": "L29"
+    },
+    {
+      "id": "internal_verify_verify_test_testfixturesexist",
+      "label": "TestFixturesExist()",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "testfixturesexist()",
+      "source_file": "internal/verify/verify_test.go",
+      "source_location": "L143"
+    },
+    {
+      "id": "internal_verify_verify_test_testmissingbenchmarkwarns",
+      "label": "TestMissingBenchmarkWarns()",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "testmissingbenchmarkwarns()",
+      "source_file": "internal/verify/verify_test.go",
+      "source_location": "L96"
+    },
+    {
+      "id": "internal_verify_verify_test_testregressionwinsoverimprovement",
+      "label": "TestRegressionWinsOverImprovement()",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "testregressionwinsoverimprovement()",
+      "source_file": "internal/verify/verify_test.go",
+      "source_location": "L68"
+    },
+    {
+      "id": "internal_verify_verify_test_testsameisnochange",
+      "label": "TestSameIsNoChange()",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "testsameisnochange()",
+      "source_file": "internal/verify/verify_test.go",
+      "source_location": "L56"
+    },
+    {
+      "id": "internal_verify_verify_test_testsinglesampledoesnotclaimsignificance",
+      "label": "TestSingleSampleDoesNotClaimSignificance()",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "testsinglesampledoesnotclaimsignificance()",
+      "source_file": "internal/verify/verify_test.go",
+      "source_location": "L84"
+    },
+    {
+      "id": "internal_verify_verify_test_testslowerisregressed",
+      "label": "TestSlowerIsRegressed()",
+      "_origin": "ast",
+      "community": 14,
+      "community_name": "testing.T",
+      "file_type": "code",
+      "norm_label": "testslowerisregressed()",
+      "source_file": "internal/verify/verify_test.go",
+      "source_location": "L44"
     },
     {
       "id": "go_type_os_exec_cmd",
@@ -1853,7 +1809,7 @@
       "file_type": "code",
       "norm_label": "explanationheadinginfo",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L280"
+      "source_location": "L298"
     },
     {
       "id": "escape_result",
@@ -1875,7 +1831,7 @@
       "file_type": "code",
       "norm_label": "versiontuple",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L672"
+      "source_location": "L690"
     },
     {
       "id": "internal_escape_parse",
@@ -1897,7 +1853,7 @@
       "file_type": "code",
       "norm_label": "checkversion()",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L647"
+      "source_location": "L665"
     },
     {
       "id": "internal_escape_parse_isexplanationheading",
@@ -1908,7 +1864,7 @@
       "file_type": "code",
       "norm_label": "isexplanationheading()",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L286"
+      "source_location": "L304"
     },
     {
       "id": "internal_escape_parse_isflowcontinuation",
@@ -1919,7 +1875,7 @@
       "file_type": "code",
       "norm_label": "isflowcontinuation()",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L219"
+      "source_location": "L235"
     },
     {
       "id": "internal_escape_parse_isignoreddiagnostic",
@@ -1930,7 +1886,7 @@
       "file_type": "code",
       "norm_label": "isignoreddiagnostic()",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L369"
+      "source_location": "L387"
     },
     {
       "id": "internal_escape_parse_isnewerthan",
@@ -1941,7 +1897,7 @@
       "file_type": "code",
       "norm_label": "isnewerthan()",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L702"
+      "source_location": "L720"
     },
     {
       "id": "internal_escape_parse_isolderthan",
@@ -1952,7 +1908,7 @@
       "file_type": "code",
       "norm_label": "isolderthan()",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L713"
+      "source_location": "L731"
     },
     {
       "id": "internal_escape_parse_parse",
@@ -1974,7 +1930,7 @@
       "file_type": "code",
       "norm_label": "parseescapetemplate()",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L382"
+      "source_location": "L400"
     },
     {
       "id": "internal_escape_parse_parseexplanationheading",
@@ -1985,7 +1941,7 @@
       "file_type": "code",
       "norm_label": "parseexplanationheading()",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L304"
+      "source_location": "L322"
     },
     {
       "id": "internal_escape_parse_parseflowstep",
@@ -1996,7 +1952,7 @@
       "file_type": "code",
       "norm_label": "parseflowstep()",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L225"
+      "source_location": "L243"
     },
     {
       "id": "internal_escape_parse_parseposition",
@@ -2007,7 +1963,7 @@
       "file_type": "code",
       "norm_label": "parseposition()",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L193"
+      "source_location": "L201"
     },
     {
       "id": "internal_escape_parse_parseversion",
@@ -2018,7 +1974,7 @@
       "file_type": "code",
       "norm_label": "parseversion()",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L677"
+      "source_location": "L695"
     },
     {
       "id": "internal_escape_parse_test",
@@ -2074,6 +2030,28 @@
       "norm_label": "testparseattachesflowandfunction()",
       "source_file": "internal/escape/parse_test.go",
       "source_location": "L146"
+    },
+    {
+      "id": "internal_escape_parse_test_testparsecoverseverycompilertemplate",
+      "label": "TestParseCoversEveryCompilerTemplate()",
+      "_origin": "ast",
+      "community": 16,
+      "community_name": "Parse",
+      "file_type": "code",
+      "norm_label": "testparsecoverseverycompilertemplate()",
+      "source_file": "internal/escape/parse_test.go",
+      "source_location": "L410"
+    },
+    {
+      "id": "internal_escape_parse_test_testparsehandlesatruncatedexplanation",
+      "label": "TestParseHandlesATruncatedExplanation()",
+      "_origin": "ast",
+      "community": 16,
+      "community_name": "Parse",
+      "file_type": "code",
+      "norm_label": "testparsehandlesatruncatedexplanation()",
+      "source_file": "internal/escape/parse_test.go",
+      "source_location": "L480"
     },
     {
       "id": "internal_escape_parse_test_testparsehandleslineswithnoposition",
@@ -3272,26 +3250,15 @@
       "source_location": "L295"
     },
     {
-      "id": "benchmark_options",
-      "label": "Options",
+      "id": "go_type_io_reader",
+      "label": "io.Reader",
       "_origin": "ast",
       "community": 4,
       "community_name": "Run",
       "file_type": "code",
-      "norm_label": "options",
-      "source_file": "internal/benchmark/benchmark.go",
-      "source_location": "L21"
-    },
-    {
-      "id": "benchmark_result",
-      "label": "Result",
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Run",
-      "file_type": "code",
-      "norm_label": "result",
-      "source_file": "internal/benchmark/benchmark.go",
-      "source_location": "L33"
+      "norm_label": "io.reader",
+      "source_file": "",
+      "source_location": ""
     },
     {
       "id": "go_type_io_writer",
@@ -3303,61 +3270,6 @@
       "norm_label": "io.writer",
       "source_file": "",
       "source_location": ""
-    },
-    {
-      "id": "go_type_time_duration",
-      "label": "time.Duration",
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Run",
-      "file_type": "code",
-      "norm_label": "time.duration",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "internal_benchmark_benchmark",
-      "label": "benchmark.go",
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Run",
-      "file_type": "code",
-      "norm_label": "benchmark.go",
-      "source_file": "internal/benchmark/benchmark.go",
-      "source_location": "L1"
-    },
-    {
-      "id": "internal_benchmark_benchmark_run",
-      "label": "Run()",
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Run",
-      "file_type": "code",
-      "norm_label": "run()",
-      "source_file": "internal/benchmark/benchmark.go",
-      "source_location": "L42"
-    },
-    {
-      "id": "internal_benchmark_cancel_unix_test",
-      "label": "cancel_unix_test.go",
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Run",
-      "file_type": "code",
-      "norm_label": "cancel_unix_test.go",
-      "source_file": "internal/benchmark/cancel_unix_test.go",
-      "source_location": "L1"
-    },
-    {
-      "id": "internal_benchmark_cancel_unix_test_testruncancellationkillsrunningtestprocess",
-      "label": "TestRunCancellationKillsRunningTestProcess()",
-      "_origin": "ast",
-      "community": 4,
-      "community_name": "Run",
-      "file_type": "code",
-      "norm_label": "testruncancellationkillsrunningtestprocess()",
-      "source_file": "internal/benchmark/cancel_unix_test.go",
-      "source_location": "L17"
     },
     {
       "id": "internal_capture_capture",
@@ -3569,6 +3481,17 @@
       "source_location": "L67"
     },
     {
+      "id": "internal_schema_schema_go_schema_benchcomparison",
+      "label": "BenchComparison",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "Run",
+      "file_type": "code",
+      "norm_label": "benchcomparison",
+      "source_file": "internal/schema/schema.go",
+      "source_location": "L187"
+    },
+    {
       "id": "internal_schema_schema_go_schema_diagnosis",
       "label": "Diagnosis",
       "_origin": "ast",
@@ -3578,6 +3501,105 @@
       "norm_label": "diagnosis",
       "source_file": "internal/schema/schema.go",
       "source_location": "L116"
+    },
+    {
+      "id": "internal_schema_schema_go_schema_verifyresult",
+      "label": "VerifyResult",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "Run",
+      "file_type": "code",
+      "norm_label": "verifyresult",
+      "source_file": "internal/schema/schema.go",
+      "source_location": "L171"
+    },
+    {
+      "id": "internal_verify_verify",
+      "label": "verify/verify.go",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "Run",
+      "file_type": "code",
+      "norm_label": "verify/verify.go",
+      "source_file": "internal/verify/verify.go",
+      "source_location": "L1"
+    },
+    {
+      "id": "internal_verify_verify_compare",
+      "label": "compare()",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "Run",
+      "file_type": "code",
+      "norm_label": "compare()",
+      "source_file": "internal/verify/verify.go",
+      "source_location": "L203"
+    },
+    {
+      "id": "internal_verify_verify_finitepvalue",
+      "label": "finitePValue()",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "Run",
+      "file_type": "code",
+      "norm_label": "finitepvalue()",
+      "source_file": "internal/verify/verify.go",
+      "source_location": "L257"
+    },
+    {
+      "id": "internal_verify_verify_fromfiles",
+      "label": "FromFiles()",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "Run",
+      "file_type": "code",
+      "norm_label": "fromfiles()",
+      "source_file": "internal/verify/verify.go",
+      "source_location": "L34"
+    },
+    {
+      "id": "internal_verify_verify_fromreaders",
+      "label": "FromReaders()",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "Run",
+      "file_type": "code",
+      "norm_label": "fromreaders()",
+      "source_file": "internal/verify/verify.go",
+      "source_location": "L52"
+    },
+    {
+      "id": "internal_verify_verify_go_verify_options",
+      "label": "Options",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "Run",
+      "file_type": "code",
+      "norm_label": "options",
+      "source_file": "internal/verify/verify.go",
+      "source_location": "L25"
+    },
+    {
+      "id": "internal_verify_verify_readbenchmarks",
+      "label": "readBenchmarks()",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "Run",
+      "file_type": "code",
+      "norm_label": "readbenchmarks()",
+      "source_file": "internal/verify/verify.go",
+      "source_location": "L161"
+    },
+    {
+      "id": "internal_verify_verify_warningstrings",
+      "label": "warningStrings()",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "Run",
+      "file_type": "code",
+      "norm_label": "warningstrings()",
+      "source_file": "internal/verify/verify.go",
+      "source_location": "L245"
     },
     {
       "id": "measurement_config_metrics",
@@ -5721,7 +5743,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L652",
+      "source_location": "L670",
       "weight": 1.0
     },
     {
@@ -5733,7 +5755,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L661",
+      "source_location": "L679",
       "weight": 1.0
     },
     {
@@ -5745,7 +5767,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L666",
+      "source_location": "L684",
       "weight": 1.0
     },
     {
@@ -5757,7 +5779,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L110",
+      "source_location": "L111",
       "weight": 1.0
     },
     {
@@ -5769,7 +5791,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L113",
+      "source_location": "L118",
       "weight": 1.0
     },
     {
@@ -5781,7 +5803,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L132",
+      "source_location": "L136",
       "weight": 1.0
     },
     {
@@ -5793,7 +5815,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L133",
+      "source_location": "L137",
       "weight": 1.0
     },
     {
@@ -5805,7 +5827,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L149",
+      "source_location": "L153",
       "weight": 1.0
     },
     {
@@ -5817,7 +5839,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L155",
+      "source_location": "L159",
       "weight": 1.0
     },
     {
@@ -5841,7 +5863,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L86",
+      "source_location": "L87",
       "weight": 1.0
     },
     {
@@ -5853,7 +5875,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L263",
+      "source_location": "L281",
       "weight": 1.0
     },
     {
@@ -8397,7 +8419,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L647",
+      "source_location": "L665",
       "weight": 1.0
     },
     {
@@ -8409,7 +8431,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L702",
+      "source_location": "L720",
       "weight": 1.0
     },
     {
@@ -8421,7 +8443,7 @@
       "confidence_score": 1.0,
       "context": "parameter_type",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L713",
+      "source_location": "L731",
       "weight": 1.0
     },
     {
@@ -8458,6 +8480,30 @@
       "context": "parameter_type",
       "source_file": "internal/escape/parse_test.go",
       "source_location": "L146",
+      "weight": 1.0
+    },
+    {
+      "source": "internal_escape_parse_test_testparsecoverseverycompilertemplate",
+      "target": "go_type_testing_t",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "parameter_type",
+      "source_file": "internal/escape/parse_test.go",
+      "source_location": "L410",
+      "weight": 1.0
+    },
+    {
+      "source": "internal_escape_parse_test_testparsehandlesatruncatedexplanation",
+      "target": "go_type_testing_t",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "parameter_type",
+      "source_file": "internal/escape/parse_test.go",
+      "source_location": "L480",
       "weight": 1.0
     },
     {
@@ -10089,7 +10135,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L382",
+      "source_location": "L400",
       "weight": 1.0
     },
     {
@@ -10101,7 +10147,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L304",
+      "source_location": "L322",
       "weight": 1.0
     },
     {
@@ -10113,7 +10159,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L225",
+      "source_location": "L243",
       "weight": 1.0
     },
     {
@@ -10125,7 +10171,7 @@
       "confidence_score": 1.0,
       "context": "return_type",
       "source_file": "internal/escape/parse.go",
-      "source_location": "L677",
+      "source_location": "L695",
       "weight": 1.0
     },
     {
@@ -11550,7 +11596,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/escape/parse.go",
-      "source_location": "L193",
+      "source_location": "L201",
       "weight": 1.0
     },
     {
@@ -11561,7 +11607,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/escape/parse.go",
-      "source_location": "L219",
+      "source_location": "L235",
       "weight": 1.0
     },
     {
@@ -11572,7 +11618,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/escape/parse.go",
-      "source_location": "L225",
+      "source_location": "L243",
       "weight": 1.0
     },
     {
@@ -11594,7 +11640,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/escape/parse.go",
-      "source_location": "L280",
+      "source_location": "L298",
       "weight": 1.0
     },
     {
@@ -11605,7 +11651,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/escape/parse.go",
-      "source_location": "L286",
+      "source_location": "L304",
       "weight": 1.0
     },
     {
@@ -11616,7 +11662,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/escape/parse.go",
-      "source_location": "L304",
+      "source_location": "L322",
       "weight": 1.0
     },
     {
@@ -11627,7 +11673,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/escape/parse.go",
-      "source_location": "L369",
+      "source_location": "L387",
       "weight": 1.0
     },
     {
@@ -11638,7 +11684,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/escape/parse.go",
-      "source_location": "L382",
+      "source_location": "L400",
       "weight": 1.0
     },
     {
@@ -11660,7 +11706,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/escape/parse.go",
-      "source_location": "L647",
+      "source_location": "L665",
       "weight": 1.0
     },
     {
@@ -11671,7 +11717,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/escape/parse.go",
-      "source_location": "L672",
+      "source_location": "L690",
       "weight": 1.0
     },
     {
@@ -11682,7 +11728,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/escape/parse.go",
-      "source_location": "L677",
+      "source_location": "L695",
       "weight": 1.0
     },
     {
@@ -11693,7 +11739,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/escape/parse.go",
-      "source_location": "L702",
+      "source_location": "L720",
       "weight": 1.0
     },
     {
@@ -11704,7 +11750,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "internal/escape/parse.go",
-      "source_location": "L713",
+      "source_location": "L731",
       "weight": 1.0
     },
     {
@@ -11808,6 +11854,17 @@
     },
     {
       "source": "internal_escape_parse_test",
+      "target": "internal_escape_parse_test_testparsecoverseverycompilertemplate",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "internal/escape/parse_test.go",
+      "source_location": "L410",
+      "weight": 1.0
+    },
+    {
+      "source": "internal_escape_parse_test",
       "target": "internal_escape_parse_test_testparsemutationsoutput",
       "relation": "contains",
       "_origin": "ast",
@@ -11815,6 +11872,17 @@
       "confidence_score": 1.0,
       "source_file": "internal/escape/parse_test.go",
       "source_location": "L44",
+      "weight": 1.0
+    },
+    {
+      "source": "internal_escape_parse_test",
+      "target": "internal_escape_parse_test_testparsehandlesatruncatedexplanation",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "internal/escape/parse_test.go",
+      "source_location": "L480",
       "weight": 1.0
     },
     {
@@ -14673,6 +14741,30 @@
       "weight": 1.0
     },
     {
+      "source": "internal_escape_parse_test_testparsecoverseverycompilertemplate",
+      "target": "internal_escape_parse_parse",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "context": "call",
+      "source_file": "internal/escape/parse_test.go",
+      "source_location": "L449",
+      "weight": 1.0
+    },
+    {
+      "source": "internal_escape_parse_test_testparsehandlesatruncatedexplanation",
+      "target": "internal_escape_parse_parse",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "context": "call",
+      "source_file": "internal/escape/parse_test.go",
+      "source_location": "L490",
+      "weight": 1.0
+    },
+    {
       "source": "internal_escape_parse_test_testparsehandleslineswithnoposition",
       "target": "internal_escape_parse_parse",
       "relation": "calls",
@@ -15370,5 +15462,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "4ce38c798e1a5f54cbf400c49a739ff1fa906520"
+  "built_at_commit": "2d315f807988d8d617d605540dccd6826101e0d6"
 }

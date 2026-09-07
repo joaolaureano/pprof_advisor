@@ -1,21 +1,21 @@
 # Graph Report - pprof_advisor  (2026-09-06)
 
 ## Corpus Check
-- 72 files · ~46,370 words
+- 72 files · ~47,259 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 411 nodes · 928 edges · 27 communities (23 shown, 4 thin omitted)
-- Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 108 edges (avg confidence: 0.85)
+- 413 nodes · 934 edges · 27 communities (23 shown, 4 thin omitted)
+- Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 110 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `4ce38c79`
+- Built from commit: `2d315f80`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- FromReaders
+- Run
 - modelFlags
 - profadvisor
 - Run
@@ -24,7 +24,7 @@
 - FromProfile
 - Run
 - table
-- buildUserPrompt
+- Catalog
 - example.com/profadvisor/fixture
 - github.com/joaolaureano/profadvisor
 - Run
@@ -36,9 +36,9 @@
 - load
 
 ## God Nodes (most connected - your core abstractions)
-1. `FromProfile()` - 21 edges
-2. `Run()` - 20 edges
-3. `Parse()` - 20 edges
+1. `Parse()` - 22 edges
+2. `FromProfile()` - 21 edges
+3. `Run()` - 20 edges
 4. `Run()` - 19 edges
 5. `Run()` - 18 edges
 6. `Config` - 16 edges
@@ -64,9 +64,9 @@
 
 ## Communities (27 total, 4 thin omitted)
 
-### Community 0 - "FromReaders"
-Cohesion: 0.18
-Nodes (21): io.Reader, BenchComparison, VerifyResult, compare(), finitePValue(), FromFiles(), FromReaders(), Options (+13 more)
+### Community 0 - "Run"
+Cohesion: 0.47
+Nodes (4): Options, Result, Run(), TestRunCancellationKillsRunningTestProcess()
 
 ### Community 1 - "modelFlags"
 Cohesion: 0.07
@@ -82,7 +82,7 @@ Nodes (23): Options, responseSchema(), Run(), realExtract(), TestAPIErrorIsWrapp
 
 ### Community 4 - "Run"
 Cohesion: 0.12
-Nodes (24): Options, Result, io.Writer, time.Duration, Run(), TestRunCancellationKillsRunningTestProcess(), Options, Result (+16 more)
+Nodes (29): io.Reader, io.Writer, Options, Result, profileFile(), Run(), TestWrongProfileKindIsRejected(), Config (+21 more)
 
 ### Community 5 - "github.com/spf13/cobra.Command"
 Cohesion: 0.16
@@ -100,17 +100,17 @@ Nodes (21): context.Context, changedFiles(), git(), gitError(), Options, nextBra
 Cohesion: 0.27
 Nodes (10): testing.B, Table, matches(), New(), segment(), BenchmarkFanout50(), BenchmarkParam(), BenchmarkStatic() (+2 more)
 
-### Community 10 - "buildUserPrompt"
-Cohesion: 0.16
-Nodes (12): render, strings.Builder, buildUserPrompt(), coster(), dec1(), compareGolden(), TestPromptsMatchGolden(), nanos() (+4 more)
+### Community 10 - "Catalog"
+Cohesion: 0.12
+Nodes (16): render, strings.Builder, buildUserPrompt(), coster(), dec1(), compareGolden(), TestPromptsMatchGolden(), nanos() (+8 more)
 
 ### Community 13 - "Run"
 Cohesion: 0.15
-Nodes (21): Options, Run(), corpusDir(), TestRunAgainstTheCorpus(), TestRunFailsOnATargetThatDoesNotCompile(), TestRunLeavesNothingUnrecognized(), TestRunRejectsAMissingDirectory(), TestRunSortsFindingsDeterministically() (+13 more)
+Nodes (22): Options, time.Duration, Run(), corpusDir(), TestRunAgainstTheCorpus(), TestRunFailsOnATargetThatDoesNotCompile(), TestRunLeavesNothingUnrecognized(), TestRunRejectsAMissingDirectory() (+14 more)
 
 ### Community 14 - "testing.T"
-Cohesion: 0.11
-Nodes (37): invoke(), TestCLIRejectsInvalidInputs(), TestEscapeCLI(), TestExtractCLIEmitsV3CPU(), TestVerifyCLIObjectiveAndExitContract(), writeInput(), testing.T, memoryRepo() (+29 more)
+Cohesion: 0.10
+Nodes (44): invoke(), TestCLIRejectsInvalidInputs(), TestEscapeCLI(), TestExtractCLIEmitsV3CPU(), TestVerifyCLIObjectiveAndExitContract(), writeInput(), testing.T, memoryRepo() (+36 more)
 
 ### Community 15 - "os/exec.Cmd"
 Cohesion: 0.40
@@ -118,7 +118,7 @@ Nodes (3): os/exec.Cmd, Configure(), Configure()
 
 ### Community 16 - "Parse"
 Cohesion: 0.13
-Nodes (31): explanationHeadingInfo, Result, versionTuple, checkVersion(), isExplanationHeading(), isFlowContinuation(), isIgnoredDiagnostic(), isNewerThan() (+23 more)
+Nodes (33): explanationHeadingInfo, Result, versionTuple, checkVersion(), isExplanationHeading(), isFlowContinuation(), isIgnoredDiagnostic(), isNewerThan() (+25 more)
 
 ### Community 26 - "load"
 Cohesion: 0.21
@@ -132,17 +132,17 @@ Nodes (12): TestRunAgainstFixtureModule(), load(), TestAllProfRanksFixtureCode()
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Run()` connect `Run` to `modelFlags`, `Run`, `github.com/spf13/cobra.Command`, `Run`, `buildUserPrompt`, `testing.T`?**
+- **Why does `Run()` connect `Run` to `modelFlags`, `Run`, `github.com/spf13/cobra.Command`, `Run`, `Catalog`, `testing.T`?**
   _High betweenness centrality (0.070) - this node is a cross-community bridge._
-- **Why does `FromProfile()` connect `FromProfile` to `load`, `buildUserPrompt`, `Run`, `Run`?**
+- **Why does `FromProfile()` connect `FromProfile` to `load`, `Catalog`, `Run`, `Run`?**
   _High betweenness centrality (0.067) - this node is a cross-community bridge._
 - **Why does `Parse()` connect `Parse` to `Run`?**
-  _High betweenness centrality (0.059) - this node is a cross-community bridge._
+  _High betweenness centrality (0.060) - this node is a cross-community bridge._
+- **Are the 12 inferred relationships involving `Parse()` (e.g. with `Run()` and `TestParseAttachesFlowAndFunction()`) actually correct?**
+  _`Parse()` has 12 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 3 inferred relationships involving `FromProfile()` (e.g. with `load()` and `TestSourceExcerptAbsentFileIsNotAnError()`) actually correct?**
   _`FromProfile()` has 3 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 9 inferred relationships involving `Run()` (e.g. with `buildUserPrompt()` and `systemPrompt()`) actually correct?**
   _`Run()` has 9 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 10 inferred relationships involving `Parse()` (e.g. with `Run()` and `TestParseAttachesFlowAndFunction()`) actually correct?**
-  _`Parse()` has 10 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 6 inferred relationships involving `Run()` (e.g. with `TestAppliesOnNewBranch()` and `TestBadDiffIsRefusedAndLeavesNoBranch()`) actually correct?**
   _`Run()` has 6 INFERRED edges - model-reasoned connections that need verification._

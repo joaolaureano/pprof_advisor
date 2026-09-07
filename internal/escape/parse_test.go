@@ -387,3 +387,128 @@ func compareGolden(t *testing.T, name string, got []byte) {
 		t.Errorf("%s differs from the golden file; rerun with -update and review the diff", name)
 	}
 }
+
+// TestParseCoversEveryCompilerTemplate is an inventory, not a sample.
+//
+// Every other test here runs on recorded output, which only proves the parser
+// handles what the corpus happened to provoke. That is a weak guarantee: three
+// templates are gated behind a debug flag, several need a construct nobody
+// wrote, and one — the truncated-explanation warning — needs an assignment
+// cycle. A real nine-package service produced 5868 diagnostic lines without
+// triggering it.
+//
+// So this table is transcribed from the format strings in
+// cmd/compile/internal/escape (escape.go, solve.go, graph.go, assign.go,
+// alias.go) as of go1.26.1, with the %v placeholders filled in. It is the answer
+// to "does the parser cover everything the compiler can say about escape", and
+// it fails when a Go upgrade adds a sentence that nobody has taught it.
+//
+// Deliberately absent: the two base.ErrorfAt messages ("escapes to heap, not
+// allowed in runtime" and "is incomplete (or unallocatable)"), which fail the
+// build rather than reaching a report, and the stmt.go tracing, which needs
+// -m=3 while this tool fixes -m=2.
+func TestParseCoversEveryCompilerTemplate(t *testing.T) {
+	const pos = "x.go:1:1: "
+	for _, tc := range []struct {
+		line string
+		want schema.EscapeKind // "" means recognized but deliberately not a finding
+	}{
+		{"moved to heap: x", schema.EscapeMovedToHeap},
+		{"&T{...} escapes to heap", schema.EscapeEscapesToHeap},
+		{"append escapes to heap", schema.EscapeEscapesToHeap},
+		{"x does not escape", schema.EscapeDoesNotEscape},
+		{"append does not escape", schema.EscapeDoesNotEscape},
+		{"zero-copy string->[]byte conversion", schema.EscapeZeroCopyConversion},
+		{"assuming x is unsafe uintptr", schema.EscapeUnsafeUintptr},
+		{"marking x as escaping uintptr", schema.EscapeUnsafeUintptr},
+		{"marking x as escaping ...uintptr", schema.EscapeUnsafeUintptr},
+		{"leaking param: p", schema.EscapeLeakingParam},
+		{"leaking param content: p", schema.EscapeLeakingParamContent},
+		{"leaking param: p to result ~r0 level=0", schema.EscapeLeakingParamResult},
+		{"mutates param: p derefs=0", schema.EscapeMutatesParam},
+		{"calls param: fn derefs=1", schema.EscapeCallsParam},
+		{"p does not escape, mutate, or call", schema.EscapeParamInert},
+		{"F capturing by ref: n (addr=false assign=true width=8)", schema.EscapeClosureCapture},
+		{"F capturing by value: n (addr=false assign=false width=8)", schema.EscapeClosureCapture},
+		{"F ignoring self-assignment in x = x", schema.EscapeSelfAssignment},
+
+		// Recognized, and deliberately not reported: these are the compiler
+		// commenting on work that is not escape analysis.
+		{"rewriting OCONVIFACE value from x (int) to y (any)", ""},
+		{"alias analysis: append using non-aliased slice: s in func F", ""},
+		{"alias analysis: mismatch for *ir.Name: x: processed 1 times, observed 2 times", ""},
+		{"can inline F with cost 5 as: func() {}", ""},
+		{"cannot inline F: function too complex", ""},
+		{"inlining call to F", ""},
+		{"devirtualizing h.Write to *sha256.Digest", ""},
+		{"index bounds check elided", ""},
+		{"generated nil check", ""},
+		{"expr will be kept alive", ""},
+	} {
+		t.Run(tc.line, func(t *testing.T) {
+			r, err := Parse([]byte(pos+tc.line+"\n"), "go1.26.1")
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+			if len(r.Unrecognized) != 0 {
+				t.Fatalf("template was not recognized: %q", r.Unrecognized[0].Text)
+			}
+			if tc.want == "" {
+				if len(r.Findings) != 0 {
+					t.Fatalf("expected no finding, got kind %q", r.Findings[0].Kind)
+				}
+				return
+			}
+			if len(r.Findings) != 1 {
+				t.Fatalf("expected exactly one finding, got %d", len(r.Findings))
+			}
+			if got := r.Findings[0].Kind; got != tc.want {
+				t.Errorf("kind = %q, want %q", got, tc.want)
+			}
+			if r.Findings[0].Evidence != pos+tc.line {
+				t.Errorf("evidence = %q, want the line verbatim", r.Findings[0].Evidence)
+			}
+		})
+	}
+}
+
+// TestParseHandlesATruncatedExplanation covers the one -m=2 line that neither
+// the corpus nor a real nine-package service produced: the compiler gives up on
+// a flow when it finds an assignment cycle. It is a continuation of the block,
+// not a diagnostic, and the report has to say the flow is partial rather than
+// let a consumer read it as complete.
+func TestParseHandlesATruncatedExplanation(t *testing.T) {
+	input := []byte(strings.Join([]string{
+		"# example.com/p",
+		"x.go:5:2: x escapes to heap in F:",
+		"x.go:5:2:   flow: {heap} ← &x:",
+		"x.go:5:2:     from &x (address-of) at x.go:6:9",
+		"x.go:5:2:   warning: truncated explanation due to assignment cycle; see golang.org/issue/35518",
+		"x.go:5:2: moved to heap: x",
+	}, "\n") + "\n")
+
+	r, err := Parse(input, "go1.26.1")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(r.Unrecognized) != 0 {
+		t.Fatalf("the truncation warning was not recognized: %q", r.Unrecognized[0].Text)
+	}
+	if len(r.Findings) != 1 || r.Findings[0].Kind != schema.EscapeMovedToHeap {
+		t.Fatalf("findings = %+v, want one moved_to_heap", r.Findings)
+	}
+	// The warning is not a hop, so it must not appear as one.
+	if n := len(r.Findings[0].Flow); n != 2 {
+		t.Errorf("flow has %d steps, want 2 (the header and one hop)", n)
+	}
+	// But the fact that the flow is incomplete has to survive.
+	var said bool
+	for _, w := range r.Warnings {
+		if strings.Contains(w, "truncated") {
+			said = true
+		}
+	}
+	if !said {
+		t.Errorf("a truncated flow was reported as if it were complete; warnings = %q", r.Warnings)
+	}
+}

@@ -384,15 +384,15 @@
     "semantic_hash": ""
   },
   "internal/escape/parse.go": {
-    "mtime": 1788743189.6445851,
-    "seen": 1788743344.655552,
-    "ast_hash": "3d4958157cc9e002fff7eac44b777a1a",
+    "mtime": 1788743933.3946164,
+    "seen": 1788744055.3139122,
+    "ast_hash": "3fbba3f23cf35a869991b19615ffac2b",
     "semantic_hash": ""
   },
   "internal/escape/parse_test.go": {
-    "mtime": 1788742927.5873501,
-    "seen": 1788743012.229526,
-    "ast_hash": "825d17f80389f38aa9eb31f60ef6260e",
+    "mtime": 1788743981.6551204,
+    "seen": 1788744055.313913,
+    "ast_hash": "77bf041ffffc7e025c2921d1e1a7a298",
     "semantic_hash": ""
   },
   "internal/proc/doc.go": {
