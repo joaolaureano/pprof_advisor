@@ -1,98 +1,67 @@
 package benchgen
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 )
 
-func TestDecodeSeed(t *testing.T) {
+func TestDecodeCorpusSeedTuplesAndNativeValues(t *testing.T) {
 	for _, tc := range []struct {
-		body, typ string
-		want      []byte
-		bad       bool
+		name, content string
+		types, want   []string
+		bad           bool
 	}{
-		{`string("hello")`, "string", []byte("hello"), false},
-		{`[]byte("\x00\xff\n")`, "[]byte", []byte{0, 255, 10}, false},
-		{`string("")`, "string", []byte{}, false},
-		{`[]byte("x")`, "string", nil, true},
-		{`"x"`, "[]byte", nil, true},
-		{`[]byte{1}`, "[]byte", nil, true},
-		{`[]byte(call())`, "[]byte", nil, true},
-		{"\"x\"\n\"y\"", "string", nil, true},
-		{`"x" + "y"`, "string", nil, true},
-		{`"x"`, "string", nil, true},
+		{"mixed", "go test fuzz v1\nstring(\"hello\")\nint64(-42)\nbool(true)\n", []string{"string", "int64", "bool"}, []string{`"hello"`, "int64(-42)", "bool(true)"}, false},
+		{"aliases", "go test fuzz v1\nbyte('K')\nrune('œ')\n", []string{"uint8", "int32"}, []string{"uint8(75)", "int32(339)"}, false},
+		{"float_special", "go test fuzz v1\nfloat64(NaN)\nfloat32(-Inf)\nmath.Float64frombits(0x7ff8000000000001)\n", []string{"float64", "float32", "float64"}, []string{"math.NaN()", "float32(math.Inf(-1))", "math.Float64frombits(0x7ff8000000000001)"}, false},
+		{"positive_infinity", "go test fuzz v1\nfloat64(+Inf)\n", []string{"float64"}, []string{"math.Inf(1)"}, false},
+		{"wrong_arity", "go test fuzz v1\nstring(\"x\")\n", []string{"string", "int"}, nil, true},
+		{"wrong_type", "go test fuzz v1\nint(1)\n", []string{"string"}, nil, true},
+		{"bad_bits", "go test fuzz v1\nmath.Float32frombits(0x100000000)\n", []string{"float32"}, nil, true},
 	} {
-		t.Run(tc.body+tc.typ, func(t *testing.T) {
-			got, err := decodeSeed("go test fuzz v1\n"+tc.body+"\n", tc.typ)
+		t.Run(tc.name, func(t *testing.T) {
+			got, _, err := decodeCorpusSeed(tc.content, tc.types)
 			if (err != nil) != tc.bad {
-				t.Fatalf("error %v", err)
+				t.Fatalf("err=%v", err)
 			}
-			if !tc.bad && !bytes.Equal(got, tc.want) {
-				t.Fatalf("got %v want %v", got, tc.want)
+			if !tc.bad && !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("got=%q want=%q", got, tc.want)
 			}
 		})
 	}
-	if _, err := decodeSeed("go test fuzz v2\n\"x\"", "string"); err == nil {
-		t.Fatal("accepted unknown header")
-	}
 }
 
-func TestCorpusStableDeduplicated(t *testing.T) {
+func TestCorpusStableDeduplicatedByCompleteTuple(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := loadCorpus(dir, "string"); err == nil {
+	if _, err := loadCorpus(dir, []string{"string", "int"}); err == nil {
 		t.Fatal("accepted empty corpus")
 	}
-	for name, value := range map[string]string{"z": "foo", "a": "bar", "b": "foo"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("go test fuzz v1\nstring(\""+value+"\")\n"), 0600); err != nil {
+	files := map[string]string{
+		"a": "go test fuzz v1\nstring(\"ab\")\nint(3)\n",
+		"b": "go test fuzz v1\nstring(\"ab\")\nint(3)\n",
+		"c": "go test fuzz v1\nstring(\"a\")\nint(23)\n",
+	}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	seeds, err := loadCorpus(dir, "string")
+	seeds, err := loadCorpus(dir, []string{"string", "int"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(seeds) != 2 || seeds[0].Hash >= seeds[1].Hash {
-		t.Fatalf("bad seed order: %+v", seeds)
+		t.Fatalf("bad seeds: %+v", seeds)
 	}
 	for _, seed := range seeds {
-		if string(seed.Data) == "foo" && len(seed.Origins) != 2 {
+		if seed.Literals[0] == `"ab"` && len(seed.Origins) != 2 {
 			t.Fatal("duplicate origins lost")
 		}
 	}
-	again, err := loadCorpus(dir, "string")
+	again, err := loadCorpus(dir, []string{"string", "int"})
 	if err != nil || !reflect.DeepEqual(seeds, again) {
 		t.Fatal("unstable corpus")
-	}
-}
-
-func TestDecodeScalarSeedCanonicalizesAndRejectsMismatches(t *testing.T) {
-	for _, tc := range []struct {
-		input, body, want string
-		bad               bool
-	}{
-		{"bool", "bool(true)", "bool(true)", false},
-		{"int8", "int8(-7)", "int8(-7)", false},
-		{"uint16", "uint16(0xff)", "uint16(255)", false},
-		{"int32", "int32(65)", "int32(65)", false},
-		{"float32", "float32(1.5)", "float32(1.5)", false},
-		{"float64", "float64(-2e3)", "float64(-2000)", false},
-		{"uint8", "int(1)", "", true},
-		{"int8", "int8(128)", "", true},
-		{"uint", "uint(-1)", "", true},
-		{"bool", "bool(1)", "", true},
-		{"float64", "float64(NaN)", "", true},
-	} {
-		t.Run(tc.input+tc.body, func(t *testing.T) {
-			data, literal, err := decodeCorpusSeed("go test fuzz v1\n"+tc.body+"\n", tc.input)
-			if (err != nil) != tc.bad {
-				t.Fatalf("err=%v", err)
-			}
-			if !tc.bad && (string(data) != tc.want || literal != tc.want) {
-				t.Fatalf("data=%q literal=%q want=%q", data, literal, tc.want)
-			}
-		})
 	}
 }

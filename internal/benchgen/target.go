@@ -153,19 +153,27 @@ func resolveTarget(ctx context.Context, o Options) (Target, error) {
 	if pkg.Scope().Lookup(testingAlias) != nil {
 		return target, fmt.Errorf("package symbol %s conflicts with generated testing import", testingAlias)
 	}
+	for _, name := range []string{"profadvisorMath", "profadvisorMath_"} {
+		if pkg.Scope().Lookup(name) != nil {
+			return target, fmt.Errorf("package symbol %s conflicts with generated math import", name)
+		}
+	}
 	fn, ok := pkg.Scope().Lookup(o.Function).(*types.Func)
 	if !ok {
 		return target, fmt.Errorf("%s is not a package function", o.Function)
 	}
 	sig := fn.Type().(*types.Signature)
-	if sig.Recv() != nil || sig.TypeParams().Len() != 0 || sig.Variadic() || sig.Params().Len() != 1 {
-		return target, fmt.Errorf("function must be non-generic, non-variadic and accept one native Go fuzz type argument")
+	if sig.Recv() != nil || sig.TypeParams().Len() != 0 || sig.Variadic() || sig.Params().Len() == 0 {
+		return target, fmt.Errorf("function must be non-generic, non-variadic and accept one or more native Go fuzz type arguments")
 	}
-	input := fuzzInputType(sig.Params().At(0).Type())
-	if input == "" {
-		return target, fmt.Errorf("function argument must be one native Go fuzz type: string, []byte, bool, integer, uintptr, rune, float32, or float64")
+	inputs := make([]string, sig.Params().Len())
+	for i := 0; i < sig.Params().Len(); i++ {
+		inputs[i] = fuzzInputType(sig.Params().At(i).Type())
+		if inputs[i] == "" {
+			return target, fmt.Errorf("parameter %d must be one native Go fuzz type: string, []byte, bool, integer, rune, byte, float32, or float64", i+1)
+		}
 	}
-	return Target{Dir: p.Dir, Package: p.ImportPath, Name: p.Name, Function: o.Function, InputType: input, GoVersion: version, FuzzName: fuzzName, BenchmarkName: benchmarkName}, nil
+	return Target{Dir: p.Dir, Package: p.ImportPath, Name: p.Name, Function: o.Function, InputTypes: inputs, GoVersion: version, FuzzName: fuzzName, BenchmarkName: benchmarkName}, nil
 }
 
 // fuzzInputType uses types.Identical deliberately: aliases such as rune and
@@ -180,7 +188,7 @@ func fuzzInputType(typ types.Type) string {
 	}
 	for _, basic := range []types.BasicKind{
 		types.Bool, types.Int, types.Int8, types.Int16, types.Int32, types.Int64,
-		types.Uint, types.Uint8, types.Uint16, types.Uint32, types.Uint64, types.Uintptr,
+		types.Uint, types.Uint8, types.Uint16, types.Uint32, types.Uint64,
 		types.Float32, types.Float64,
 	} {
 		if types.Identical(typ, types.Typ[basic]) {

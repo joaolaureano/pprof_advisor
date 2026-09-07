@@ -6,8 +6,8 @@ import (
 	"fmt"
 )
 
-const SchemaVersion = 1
-const GeneratorVersion = "1"
+const SchemaVersion = 2
+const GeneratorVersion = "2"
 
 type Options struct {
 	Dir      string
@@ -19,23 +19,23 @@ type Options struct {
 }
 
 type Target struct {
-	Dir           string `json:"dir"`
-	Package       string `json:"package"`
-	Name          string `json:"name"`
-	Function      string `json:"function"`
-	InputType     string `json:"input_type"`
-	GoVersion     string `json:"go_version"`
-	FuzzName      string `json:"fuzz_name"`
-	BenchmarkName string `json:"benchmark_name"`
+	Dir           string   `json:"dir"`
+	Package       string   `json:"package"`
+	Name          string   `json:"name"`
+	Function      string   `json:"function"`
+	InputTypes    []string `json:"input_types"`
+	GoVersion     string   `json:"go_version"`
+	FuzzName      string   `json:"fuzz_name"`
+	BenchmarkName string   `json:"benchmark_name"`
 }
 
 type Seed struct {
 	Hash    string   `json:"hash"`
 	Origins []string `json:"origins"`
-	Data    []byte   `json:"-"`
-	// Literal is a canonical Go expression used in generated source. It is kept
-	// out of the manifest because the hash is the stable seed identity.
-	Literal string `json:"-"`
+	// Literals are canonical Go expressions in the order of the target's
+	// arguments. They are kept out of the manifest; the hash is the stable
+	// identity of the complete, typed tuple.
+	Literals []string `json:"-"`
 }
 
 type Manifest struct {
@@ -65,7 +65,7 @@ func Generate(ctx context.Context, o Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	seeds, err := loadCorpus(o.Corpus, target.InputType)
+	seeds, err := loadCorpus(o.Corpus, target.InputTypes)
 	if err != nil {
 		return nil, err
 	}

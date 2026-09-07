@@ -58,17 +58,20 @@ That file is what both humans and agents should read first.
 `_test.go` file and a manifest. It uses native Go fuzzing and fixed templates;
 no model, API key, or benchmark execution is involved in generation.
 
-Each corpus file must contain one value matching the function's argument:
+Each corpus file contains one value per parameter, in the function's parameter
+order. A function with one parameter therefore has one corpus value:
 
 ```text
 go test fuzz v1
 string("example")
 ```
 
-For a `[]byte` argument, use `[]byte("example\\x00\\xff")` instead of
-`string("example")`. Scalar arguments use an explicit conversion too, such as
-`int64(-42)`, `bool(true)`, or `float64(1.5)`. Pass the directory containing
-these files explicitly:
+For a `[]byte` parameter, use `[]byte("example\\x00\\xff")` instead of
+`string("example")`. Scalar parameters use an explicit conversion too, such as
+`int64(-42)`, `bool(true)`, or `float64(1.5)`. A function taking `string`,
+`int64`, and `bool` has three lines after the header. Pass the directory
+containing these files explicitly. The native special-float forms `NaN`, `+Inf`,
+`-Inf`, and `math.Float32frombits`/`math.Float64frombits` are also accepted:
 
 ```sh
 ./profadvisor benchgen --dir /path/to/repo --pkg ./internal/parser \
@@ -76,18 +79,19 @@ these files explicitly:
 ```
 
 One execution handles one package-level function, including unexported functions.
-It must be non-generic, non-variadic, and accept one native Go fuzz type:
+It must be non-generic, non-variadic, and accept one or more native Go fuzz types:
 `string`, `[]byte`, `bool`, `int`, `int8`, `int16`, `int32` (including `rune`),
 `int64`, `uint`, `uint8` (including `byte`), `uint16`, `uint32`, `uint64`,
-`uintptr`, `float32`, or `float64`. Defined types are not yet supported.
+`float32`, or `float64`. `uintptr` is not accepted by Go fuzzing. Defined types
+are not yet supported.
 Return values, including errors, are discarded. Methods and custom setup are
 unsupported, as are packages using cgo. The target must use a Go 1.24+ toolchain
 for `b.Loop()`.
 The function must be deterministic, independent of external state, and must
-neither modify nor retain its argument. These are caller obligations; generation
+neither modify nor retain its arguments. These are caller obligations; generation
 cannot prove them.
 
-The generated `FuzzProfadvisor_parse` embeds each unique seed with `f.Add`.
+The generated `FuzzProfadvisor_parse` embeds each unique tuple with `f.Add`.
 It detects panics; it defines no additional correctness property. The generated
 `BenchmarkProfadvisor_parse` has one sub-benchmark per seed, named by its SHA256.
 Inputs are prepared before `b.Loop()`, allocations are reported, and the measured
@@ -96,7 +100,7 @@ inside the benchmark.
 
 `--out` receives the code and manifest. `--write` additionally installs the same
 code in the target package. Existing files and conflicting symbols are refused.
-The JSON report and manifest use their own `schema_version: 1`; the report says
+The JSON report and manifest use their own `schema_version: 2`; the report says
 `generated: true` and `validated: false` because the target has not been executed.
 Use `--format text` for a readable report. Diagnostics use stderr and exits are
 0 for success or 1 for failure, as with the other commands.

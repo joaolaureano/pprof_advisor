@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -34,6 +35,9 @@ func TestResolveTarget(t *testing.T) {
  func flag(v bool) {}
  func ratio(v float32) {}
  func runeArg(v rune) {}
+
+ func tuple(s string, n int64, ok bool) {}
+ func pointer(p uintptr) {}
  func alias(a Alias) {}
  func named(n Named) {}
  func generic[T any](s string) {}
@@ -42,15 +46,18 @@ func TestResolveTarget(t *testing.T) {
  type T struct{}
  func (T) method(s string) {}
  `)
-	for _, name := range []string{"hidden", "bytes", "alias", "number", "flag", "ratio", "runeArg", "named", "generic", "variadic", "zero", "method", "missing"} {
+	for _, name := range []string{"hidden", "bytes", "alias", "number", "flag", "ratio", "runeArg", "tuple", "pointer", "named", "generic", "variadic", "zero", "method", "missing"} {
 		t.Run(name, func(t *testing.T) {
 			target, err := resolveTarget(context.Background(), Options{Dir: dir, Package: ".", Function: name})
-			wantOK := name == "hidden" || name == "bytes" || name == "alias" || name == "number" || name == "flag" || name == "ratio" || name == "runeArg"
+			wantOK := name == "hidden" || name == "bytes" || name == "alias" || name == "number" || name == "flag" || name == "ratio" || name == "runeArg" || name == "tuple"
 			if (err == nil) != wantOK {
 				t.Fatalf("target %+v, error %v", target, err)
 			}
 			if wantOK && target.FuzzName != "FuzzProfadvisor_"+name {
 				t.Fatal("wrong name")
+			}
+			if name == "tuple" && !reflect.DeepEqual(target.InputTypes, []string{"string", "int64", "bool"}) {
+				t.Fatalf("types=%q", target.InputTypes)
 			}
 		})
 	}

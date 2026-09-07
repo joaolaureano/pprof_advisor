@@ -156,19 +156,21 @@ assume nanoseconds.** Version 1 named these fields `*_nanos` and had no
 
 Generates offline same-package fuzz tests and benchmarks from a frozen Go fuzz
 v1 corpus. Accepts one non-generic, non-variadic package-level function with one
-native Go fuzz argument: `string`, `[]byte`, `bool`, every built-in signed or
-unsigned integer type, `uintptr`, `rune`, `byte`, `float32`, or `float64`,
+or more native Go fuzz arguments: `string`, `[]byte`, `bool`, every built-in signed or
+unsigned integer type, `rune`, `byte`, `float32`, or `float64`,
 including unexported functions. Defined types are not supported. Corpus values
-use their exact explicit conversion, for example `int64(-42)` or `bool(true)`.
+use their exact explicit conversion, one line per function argument in signature
+order, for example `int64(-42)` or `bool(true)`. A corpus file is one complete
+argument tuple. `uintptr` is not a native Go fuzz type and is refused.
 Requires a Go 1.24+ target toolchain. Returns are discarded; fuzz replay detects panics
 without inventing correctness properties or treating returned errors as failures.
 The caller must ensure determinism, no external state, and no mutation or
-retention of the input.
+retention of inputs.
 
 The output directory receives self-contained code and a manifest recording
 target, generator version, seed origins and hashes. `--write` also installs the
 test in the target package; existing files and symbol conflicts are refused.
-This reporter has its own schema version **1** and no measurement object.
+This reporter has its own schema version **2** and no measurement object.
 `generated: true` with `validated: false` means generation succeeded, not that
 the seeds passed: generation never executes the target and needs no API key.
 
