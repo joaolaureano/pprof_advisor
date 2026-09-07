@@ -1,6 +1,5 @@
 {
-  "0": "Run",
-  "1": "modelFlags",
+  "1": "Catalog",
   "2": "profadvisor",
   "3": "FromReaders",
   "4": "Resolve",
@@ -24,6 +23,6 @@
   "23": "escape/README.md",
   "24": "doc.go",
   "25": "example.com/escapecorpus",
-  "26": "load",
-  "27": "buildUserPrompt"
+  "26": "Load",
+  "27": "Text"
 }

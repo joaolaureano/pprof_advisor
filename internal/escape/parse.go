@@ -148,8 +148,8 @@ func Parse(stderr []byte, toolchainVersion string) (*Result, error) {
 					// matters because the alternative is a consumer reading a
 					// partial explanation as a complete one.
 					truncated++
-				} else if step := parseFlowStep(rest, file); step != nil {
-					pending.Flow = append(pending.Flow, *step)
+				} else if step, ok := parseFlowStep(rest, file); ok {
+					pending.Flow = append(pending.Flow, step)
 				}
 				r.Ignored++
 				continue
@@ -167,8 +167,8 @@ func Parse(stderr []byte, toolchainVersion string) (*Result, error) {
 
 		// Check for explanation heading.
 		if isExplanationHeading(rest) {
-			heading := parseExplanationHeading(rest)
-			if heading != nil {
+			function, ok := parseExplanationHeading(rest)
+			if ok {
 				// Create a pending block for this position. Give Flow a small initial
 				// capacity: a typical explanation has a handful of steps.
 				pendingBlocks[posKey] = &schema.EscapeFinding{
@@ -176,7 +176,7 @@ func Parse(stderr []byte, toolchainVersion string) (*Result, error) {
 					File:     file,
 					Line:     line,
 					Column:   col,
-					Function: heading.function,
+					Function: function,
 					Flow:     make([]schema.EscapeFlowStep, 0, 4),
 				}
 			}
@@ -191,8 +191,8 @@ func Parse(stderr []byte, toolchainVersion string) (*Result, error) {
 		}
 
 		// Check for escape template.
-		finding := parseEscapeTemplate(rest, file, line, col, currentPackage, lineText)
-		if finding != nil {
+		finding, ok := parseEscapeTemplate(rest, file, line, col, currentPackage, lineText)
+		if ok {
 			r.Recognized++
 			// If a pending block exists at this position, attach its function and flow.
 			if pending, ok := pendingBlocks[posKey]; ok {
@@ -200,7 +200,7 @@ func Parse(stderr []byte, toolchainVersion string) (*Result, error) {
 				finding.Flow = pending.Flow
 				delete(pendingBlocks, posKey)
 			}
-			r.Findings = append(r.Findings, *finding)
+			r.Findings = append(r.Findings, finding)
 			continue
 		}
 
@@ -292,17 +292,15 @@ func isFlowContinuation(s string) bool {
 }
 
 // parseFlowStep extracts a flow step from a line starting with "flow: " or "from ".
-// It returns a pointer to an EscapeFlowStep or nil if it cannot parse the line.
-func parseFlowStep(s string, file string) *schema.EscapeFlowStep {
-	step := &schema.EscapeFlowStep{}
-
+// It returns false if it cannot parse the line.
+func parseFlowStep(s string, file string) (schema.EscapeFlowStep, bool) {
 	if strings.HasPrefix(s, "  flow: ") {
 		// Extract the text, everything after "  flow: "
-		step.Text = strings.TrimPrefix(s, "  flow: ")
-		return step
+		return schema.EscapeFlowStep{Text: strings.TrimPrefix(s, "  flow: ")}, true
 	}
 
 	if strings.HasPrefix(s, "    from ") {
+		step := schema.EscapeFlowStep{}
 		// Extract the "from ..." part and the reason in parentheses.
 		s := strings.TrimPrefix(s, "    from ")
 
@@ -311,7 +309,7 @@ func parseFlowStep(s string, file string) *schema.EscapeFlowStep {
 		atIdx := strings.LastIndex(s, " at ")
 		if atIdx < 0 {
 			step.Text = s
-			return step
+			return step, true
 		}
 
 		beforeAt := s[:atIdx]
@@ -341,15 +339,10 @@ func parseFlowStep(s string, file string) *schema.EscapeFlowStep {
 			step.Column = posCol
 		}
 
-		return step
+		return step, true
 	}
 
-	return nil
-}
-
-// explanationHeadingInfo holds the parsed information from an explanation heading.
-type explanationHeadingInfo struct {
-	function string
+	return schema.EscapeFlowStep{}, false
 }
 
 // isExplanationHeading checks if the message is an explanation heading.
@@ -372,13 +365,12 @@ func isExplanationHeading(s string) bool {
 }
 
 // parseExplanationHeading extracts the function name from an explanation heading.
-func parseExplanationHeading(s string) *explanationHeadingInfo {
+func parseExplanationHeading(s string) (string, bool) {
 	// Template 1: "%v escapes to heap in %v:"
-	if strings.Contains(s, "escapes to heap in ") {
-		parts := strings.Split(s, "escapes to heap in ")
-		if len(parts) == 2 {
-			function := strings.TrimSuffix(parts[1], ":")
-			return &explanationHeadingInfo{function: function}
+	if _, function, ok := strings.Cut(s, "escapes to heap in "); ok {
+		if !strings.Contains(function, "escapes to heap in ") {
+			function = strings.TrimSuffix(function, ":")
+			return function, true
 		}
 	}
 
@@ -387,76 +379,79 @@ func parseExplanationHeading(s string) *explanationHeadingInfo {
 		forIdx := strings.Index(s, " for ")
 		withIdx := strings.Index(s, " with derefs=")
 		if forIdx > 0 && withIdx > forIdx {
-			function := s[forIdx+5 : withIdx]
-			return &explanationHeadingInfo{function: function}
+			return s[forIdx+5 : withIdx], true
 		}
 	}
 
-	return nil
+	return "", false
 }
 
-// nonEscapeDiagnostics are the -m diagnostic families that are not escape
-// analysis: inlining, devirtualization, bounds-check and nil-check elision,
-// loop-variable capture, and the rest of the compiler's commentary on its own
-// work. They share the stream with the escape output and have nothing to do
-// with it.
+// isIgnoredDiagnostic reports whether the message is a diagnostic this package
+// understands and deliberately does not report.
 //
 // This is an allowlist rather than a fallback, and that is the whole point. The
 // alternative — treating anything the escape templates do not match as
 // irrelevant — would silently swallow a genuinely new escape diagnostic, which
 // is the failure this package is built to prevent. Anything not on this list and
 // not an escape template is reported as unrecognized, loudly.
-//
-// A real project produces hundreds of these; the corpus produces almost none,
-// which is why this list was wrong until it was run against a real project.
-var nonEscapeDiagnostics = []string{
-	"can inline ",
-	"cannot inline ",
-	"inlining call to ",
-	"devirtualizing ",
-	"partially devirtualizing ",
-	"cannot devirtualize ",
-	"index bounds check elided",
-	"generated nil check",
-	"write barrier",
-	"type assertion inlined",
-	"type assertion not inlined",
-	"loop variable ",
-	"stack object ",
-	"stack closure",
-	"heap closure",
-	"closure converted to global",
-	"intrinsic substitution for ",
-	"tail call emitted",
-	"imprecise interface call",
-	"skipping static copy of ",
-	"reshaping ",
-	"alias analysis: ",
-	"rewriting OCONVIFACE",
+func isIgnoredDiagnostic(s string) bool {
+	if s == "" {
+		return false
+	}
+	// "expr", "function arg", "function result" and "dereference" all get a
+	// "... will be kept alive" line, which is about liveness, not escape.
+	if strings.HasSuffix(s, "will be kept alive") {
+		return true
+	}
+	switch s[0] {
+	case 'a':
+		return strings.HasPrefix(s, "alias analysis: ")
+	case 'c':
+		return hasAnyPrefix(s, "can inline ", "cannot inline ", "closure converted to global")
+	case 'd':
+		return hasAnyPrefix(s, "devirtualizing ", "cannot devirtualize ")
+	case 'g':
+		return strings.HasPrefix(s, "generated nil check")
+	case 'h':
+		return strings.HasPrefix(s, "heap closure")
+	case 'i':
+		return hasAnyPrefix(s, "inlining call to ", "index bounds check elided",
+			"intrinsic substitution for ", "imprecise interface call")
+	case 'l':
+		return strings.HasPrefix(s, "loop variable ")
+	case 'p':
+		return strings.HasPrefix(s, "partially devirtualizing ")
+	case 'r':
+		return hasAnyPrefix(s, "reshaping ", "rewriting OCONVIFACE")
+	case 's':
+		return hasAnyPrefix(s, "stack object ", "stack closure", "skipping static copy of ")
+	case 't':
+		return hasAnyPrefix(s, "type assertion inlined", "type assertion not inlined", "tail call emitted")
+	case 'w':
+		return strings.HasPrefix(s, "write barrier")
+	default:
+		return false
+	}
 }
 
-// isIgnoredDiagnostic reports whether the message is a diagnostic this package
-// understands and deliberately does not report.
-func isIgnoredDiagnostic(s string) bool {
-	for _, prefix := range nonEscapeDiagnostics {
+func hasAnyPrefix(s string, prefixes ...string) bool {
+	for _, prefix := range prefixes {
 		if strings.HasPrefix(s, prefix) {
 			return true
 		}
 	}
-	// "expr", "function arg", "function result" and "dereference" all get a
-	// "... will be kept alive" line, which is about liveness, not escape.
-	return strings.HasSuffix(s, "will be kept alive")
+	return false
 }
 
 // parseEscapeTemplate tries to match the message against an escape template.
-// Returns a finding if matched, nil otherwise.
-func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) *schema.EscapeFinding {
+// It returns false if no template matched.
+func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) (schema.EscapeFinding, bool) {
 	// Try templates in order (more specific first).
 
 	// "moved to heap: %v"
 	if strings.HasPrefix(msg, "moved to heap: ") {
 		subject := strings.TrimPrefix(msg, "moved to heap: ")
-		return &schema.EscapeFinding{
+		return schema.EscapeFinding{
 			Kind:     schema.EscapeMovedToHeap,
 			Package:  pkg,
 			File:     file,
@@ -464,14 +459,14 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 			Column:   col,
 			Subject:  subject,
 			Evidence: evidence,
-		}
+		}, true
 	}
 
 	// "%v escapes to heap", which also covers "append escapes to heap" with the
 	// subject "append". Explanation headings end in ":" and were consumed above.
 	if strings.HasSuffix(msg, " escapes to heap") {
 		subject := strings.TrimSuffix(msg, " escapes to heap")
-		return &schema.EscapeFinding{
+		return schema.EscapeFinding{
 			Kind:     schema.EscapeEscapesToHeap,
 			Package:  pkg,
 			File:     file,
@@ -479,13 +474,13 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 			Column:   col,
 			Subject:  subject,
 			Evidence: evidence,
-		}
+		}, true
 	}
 
 	// "%v does not escape, mutate, or call" (must come before "%v does not escape")
 	if strings.HasSuffix(msg, " does not escape, mutate, or call") {
 		subject := strings.TrimSuffix(msg, " does not escape, mutate, or call")
-		return &schema.EscapeFinding{
+		return schema.EscapeFinding{
 			Kind:     schema.EscapeParamInert,
 			Package:  pkg,
 			File:     file,
@@ -493,13 +488,13 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 			Column:   col,
 			Subject:  subject,
 			Evidence: evidence,
-		}
+		}, true
 	}
 
 	// "%v does not escape"
 	if strings.HasSuffix(msg, " does not escape") {
 		subject := strings.TrimSuffix(msg, " does not escape")
-		return &schema.EscapeFinding{
+		return schema.EscapeFinding{
 			Kind:     schema.EscapeDoesNotEscape,
 			Package:  pkg,
 			File:     file,
@@ -507,7 +502,7 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 			Column:   col,
 			Subject:  subject,
 			Evidence: evidence,
-		}
+		}, true
 	}
 
 	// "leaking param: %v to result %v level=%d", before the plainer form below.
@@ -520,14 +515,14 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 		toIdx := strings.Index(subject, " to result ")
 		levelIdx := strings.Index(subject, " level=")
 		if toIdx <= 0 || levelIdx <= toIdx {
-			return nil
+			return schema.EscapeFinding{}, false
 		}
 		levelInt, err := strconv.Atoi(subject[levelIdx+7:])
 		if err != nil {
-			return nil
+			return schema.EscapeFinding{}, false
 		}
 		target := subject[toIdx+11 : levelIdx]
-		return &schema.EscapeFinding{
+		return schema.EscapeFinding{
 			Kind:     schema.EscapeLeakingParamResult,
 			Package:  pkg,
 			File:     file,
@@ -537,13 +532,13 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 			Target:   target,
 			Level:    &levelInt,
 			Evidence: evidence,
-		}
+		}, true
 	}
 
 	// "leaking param: %v"
 	if strings.HasPrefix(msg, "leaking param: ") {
 		subject := strings.TrimPrefix(msg, "leaking param: ")
-		return &schema.EscapeFinding{
+		return schema.EscapeFinding{
 			Kind:     schema.EscapeLeakingParam,
 			Package:  pkg,
 			File:     file,
@@ -551,13 +546,13 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 			Column:   col,
 			Subject:  subject,
 			Evidence: evidence,
-		}
+		}, true
 	}
 
 	// "leaking param content: %v"
 	if strings.HasPrefix(msg, "leaking param content: ") {
 		subject := strings.TrimPrefix(msg, "leaking param content: ")
-		return &schema.EscapeFinding{
+		return schema.EscapeFinding{
 			Kind:     schema.EscapeLeakingParamContent,
 			Package:  pkg,
 			File:     file,
@@ -565,7 +560,7 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 			Column:   col,
 			Subject:  subject,
 			Evidence: evidence,
-		}
+		}, true
 	}
 
 	// "mutates param: %v derefs=%v". As above, a shape match with an unparseable
@@ -574,13 +569,13 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 		subject := strings.TrimPrefix(msg, "mutates param: ")
 		derefsIdx := strings.Index(subject, " derefs=")
 		if derefsIdx <= 0 {
-			return nil
+			return schema.EscapeFinding{}, false
 		}
 		derefsInt, err := strconv.Atoi(subject[derefsIdx+8:])
 		if err != nil {
-			return nil
+			return schema.EscapeFinding{}, false
 		}
-		return &schema.EscapeFinding{
+		return schema.EscapeFinding{
 			Kind:     schema.EscapeMutatesParam,
 			Package:  pkg,
 			File:     file,
@@ -589,7 +584,7 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 			Subject:  subject[:derefsIdx],
 			Derefs:   &derefsInt,
 			Evidence: evidence,
-		}
+		}, true
 	}
 
 	// "calls param: %v derefs=%v". As above, a shape match with an unparseable
@@ -598,13 +593,13 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 		subject := strings.TrimPrefix(msg, "calls param: ")
 		derefsIdx := strings.Index(subject, " derefs=")
 		if derefsIdx <= 0 {
-			return nil
+			return schema.EscapeFinding{}, false
 		}
 		derefsInt, err := strconv.Atoi(subject[derefsIdx+8:])
 		if err != nil {
-			return nil
+			return schema.EscapeFinding{}, false
 		}
-		return &schema.EscapeFinding{
+		return schema.EscapeFinding{
 			Kind:     schema.EscapeCallsParam,
 			Package:  pkg,
 			File:     file,
@@ -613,14 +608,14 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 			Subject:  subject[:derefsIdx],
 			Derefs:   &derefsInt,
 			Evidence: evidence,
-		}
+		}, true
 	}
 
 	// "assuming %v is unsafe uintptr" and "marking %v as escaping uintptr" variants
 	if strings.HasPrefix(msg, "assuming ") && strings.HasSuffix(msg, " is unsafe uintptr") {
 		subject := strings.TrimPrefix(msg, "assuming ")
 		subject = strings.TrimSuffix(subject, " is unsafe uintptr")
-		return &schema.EscapeFinding{
+		return schema.EscapeFinding{
 			Kind:     schema.EscapeUnsafeUintptr,
 			Package:  pkg,
 			File:     file,
@@ -628,7 +623,7 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 			Column:   col,
 			Subject:  subject,
 			Evidence: evidence,
-		}
+		}, true
 	}
 
 	if strings.HasPrefix(msg, "marking ") && strings.Contains(msg, " as escaping") && strings.Contains(msg, "uintptr") {
@@ -636,7 +631,7 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 		asIdx := strings.Index(subject, " as escaping")
 		if asIdx > 0 {
 			subject = subject[:asIdx]
-			return &schema.EscapeFinding{
+			return schema.EscapeFinding{
 				Kind:     schema.EscapeUnsafeUintptr,
 				Package:  pkg,
 				File:     file,
@@ -644,20 +639,20 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 				Column:   col,
 				Subject:  subject,
 				Evidence: evidence,
-			}
+			}, true
 		}
 	}
 
 	// "zero-copy string->[]byte conversion"
 	if msg == "zero-copy string->[]byte conversion" {
-		return &schema.EscapeFinding{
+		return schema.EscapeFinding{
 			Kind:     schema.EscapeZeroCopyConversion,
 			Package:  pkg,
 			File:     file,
 			Line:     line,
 			Column:   col,
 			Evidence: evidence,
-		}
+		}, true
 	}
 
 	// "%v capturing by ref: %v (addr=%v assign=%v width=%d)", and the by-value
@@ -679,7 +674,7 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 			if paren := strings.Index(variable, " ("); paren > 0 {
 				variable = variable[:paren]
 			}
-			return &schema.EscapeFinding{
+			return schema.EscapeFinding{
 				Kind:     schema.EscapeClosureCapture,
 				Package:  pkg,
 				File:     file,
@@ -689,7 +684,7 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 				Function: msg[:idx],
 				ByRef:    &byRef,
 				Evidence: evidence,
-			}
+			}, true
 		}
 	}
 
@@ -698,7 +693,7 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 		idx := strings.Index(msg, " ignoring self-assignment in ")
 		if idx > 0 {
 			subject := msg[:idx]
-			return &schema.EscapeFinding{
+			return schema.EscapeFinding{
 				Kind:     schema.EscapeSelfAssignment,
 				Package:  pkg,
 				File:     file,
@@ -706,11 +701,11 @@ func parseEscapeTemplate(msg, file string, line, col int, pkg, evidence string) 
 				Column:   col,
 				Subject:  subject,
 				Evidence: evidence,
-			}
+			}, true
 		}
 	}
 
-	return nil
+	return schema.EscapeFinding{}, false
 }
 
 // checkVersion checks if the toolchain version is within the validated range
