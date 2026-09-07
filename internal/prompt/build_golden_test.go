@@ -1,4 +1,4 @@
-package analyze
+package prompt
 
 import (
 	"flag"
@@ -10,7 +10,6 @@ import (
 	"github.com/joaolaureano/profadvisor/internal/extract"
 	"github.com/joaolaureano/profadvisor/internal/fixture"
 	"github.com/joaolaureano/profadvisor/internal/measurement"
-	"github.com/joaolaureano/profadvisor/internal/prompt"
 )
 
 var update = flag.Bool("update", false, "rewrite the prompt golden files")
@@ -21,10 +20,10 @@ var update = flag.Bool("update", false, "rewrite the prompt golden files")
 // therefore easy to change by accident: a stray space in a template is
 // invisible in review and silently alters every request the tool makes. These
 // goldens are the record of what was actually intended. Regenerate them with
-// `go test ./internal/analyze -update` and read the diff — a change here is a
+// `go test ./internal/prompt -update` and read the diff — a change here is a
 // change to the product, not a test fixture to be refreshed on autopilot.
 func TestPromptsMatchGolden(t *testing.T) {
-	cat, err := prompt.Load()
+	cat, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}

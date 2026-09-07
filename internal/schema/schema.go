@@ -123,30 +123,24 @@ type SourceExcerpt struct {
 // analyze
 // ---------------------------------------------------------------------------
 
-// Diagnosis is what `profadvisor analyze` writes to stdout.
-type Diagnosis struct {
+// ---------------------------------------------------------------------------
+// prompt
+// ---------------------------------------------------------------------------
+
+// PromptResult is what `profadvisor prompt` writes to stdout: an extract
+// document rendered as the request a language model would be given. Nothing
+// here has been sent anywhere — the command opens no connection.
+//
+// It carries no measurement object of its own. The objective these prompts were
+// rendered for is a property of the extract they came from.
+type PromptResult struct {
 	SchemaVersion int `json:"schema_version"`
-	// Provider and Model together identify what produced this diff. Once the
-	// provider is pluggable a bare model id is ambiguous, and reproducing a
-	// result is the only reason to record either.
-	Provider string `json:"provider,omitempty"`
-	Model    string `json:"model"`
-	// Measurement is carried through from the profile so `apply` and `verify`
-	// judge the suggestion against the objective it was asked for.
-	Measurement measurement.Config `json:"measurement"`
-	// Target names the function the model chose to attack, which is not
-	// necessarily the top hotspot.
-	Target string `json:"target"`
-	// Cause is the model's explanation of why the target is hot.
-	Cause string `json:"cause"`
-	// Change is a prose summary of the proposed rewrite.
-	Change string `json:"change"`
-	// Diff is a unified diff, applicable with `git apply` from the repo root.
-	Diff string `json:"diff"`
-	// Confidence is the model's own estimate: "high", "medium", or "low".
-	Confidence string `json:"confidence"`
-	// Risks are behavioural changes the model believes the diff could cause.
-	Risks []string `json:"risks,omitempty"`
+	// System frames the objective; User carries the hotspots and their source.
+	System string `json:"system"`
+	User   string `json:"user"`
+	// ResponseSchema is the JSON schema of the answer the prompts ask for,
+	// for a caller wiring its own structured-output request.
+	ResponseSchema map[string]any `json:"response_schema"`
 }
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-package analyze
+package prompt
 
 import (
 	"fmt"
@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/joaolaureano/profadvisor/internal/measurement"
-	"github.com/joaolaureano/profadvisor/internal/prompt"
 	"github.com/joaolaureano/profadvisor/internal/schema"
 )
 
@@ -15,7 +14,7 @@ import (
 // catalog and this code disagree about a placeholder, which is a bug rather
 // than a runtime condition, so the sticky error is checked once at the end.
 type promptBuilder struct {
-	cat *prompt.Catalog
+	cat *Catalog
 	b   strings.Builder
 	err error
 }
@@ -70,7 +69,7 @@ var noVars = map[string]string{}
 //
 // The wording itself lives in the catalog, so what the tool says can be read
 // and changed in one place without recompiling.
-func systemPrompt(cat *prompt.Catalog, cfg measurement.Config) (string, error) {
+func systemPrompt(cat *Catalog, cfg measurement.Config) (string, error) {
 	// Three objectives select parallel sets of fragments. Determine the suffix
 	// and build vars maps for each fragment separately, since not all fragments
 	// need the same variables.
@@ -143,7 +142,7 @@ func systemPrompt(cat *prompt.Catalog, cfg measurement.Config) (string, error) {
 // than listed separately, because a model reading a listing with the cost
 // sitting next to the statement reliably picks a better target than one handed
 // the same numbers in a table.
-func buildUserPrompt(cat *prompt.Catalog, r *schema.ExtractResult, module string) (string, error) {
+func buildUserPrompt(cat *Catalog, r *schema.ExtractResult, module string) (string, error) {
 	out := &promptBuilder{cat: cat}
 	cfg := r.Profile.Measurement
 	cost := measurement.Coster(cfg)
@@ -234,4 +233,85 @@ func buildUserPrompt(cat *prompt.Catalog, r *schema.ExtractResult, module string
 
 	out.put("user.task", noVars)
 	return out.done()
+}
+
+// ResponseSchema is the JSON schema of the answer the prompt asks for. It is
+// emitted alongside the prompt so a caller wiring its own structured-output
+// request sends the same contract this catalog describes.
+func (c *Catalog) ResponseSchema() (map[string]any, error) {
+	return responseSchema(c)
+}
+
+func responseSchema(cat *Catalog) (map[string]any, error) {
+	str := func(key string) (map[string]any, error) {
+		d, err := cat.Render(key, map[string]string{})
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"type": "string", "description": d}, nil
+	}
+	props := map[string]any{}
+	for field, key := range map[string]string{
+		"target": "schema.target", "cause": "schema.cause",
+		"change": "schema.change", "diff": "schema.diff",
+	} {
+		p, err := str(key)
+		if err != nil {
+			return nil, err
+		}
+		props[field] = p
+	}
+	conf, err := str("schema.confidence")
+	if err != nil {
+		return nil, err
+	}
+	conf["enum"] = []string{"high", "medium", "low"}
+	props["confidence"] = conf
+
+	risks, err := cat.Render("schema.risks", map[string]string{})
+	if err != nil {
+		return nil, err
+	}
+	props["risks"] = map[string]any{
+		"type":        "array",
+		"items":       map[string]any{"type": "string"},
+		"description": risks,
+	}
+
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []string{"target", "cause", "change", "diff", "confidence", "risks"},
+		"properties":           props,
+	}, nil
+}
+
+// Build renders the two halves of the request for one extract document: the
+// system prompt, which frames the objective, and the user prompt, which carries
+// the hotspots and their source. module names the target module, used to label
+// paths; an empty string leaves them as the profile recorded them.
+func (c *Catalog) Build(r *schema.ExtractResult, module string) (system, user string, err error) {
+	if r == nil || len(r.Hotspots) == 0 {
+		return "", "", fmt.Errorf("prompt: extract result has no hotspots")
+	}
+	cfg := r.Profile.Measurement
+	if (cfg == measurement.Config{}) {
+		resolved, rerr := measurement.Resolve("", "")
+		if rerr != nil {
+			return "", "", rerr
+		}
+		cfg = resolved
+	}
+	if verr := cfg.Validate(); verr != nil {
+		return "", "", fmt.Errorf("prompt: %w", verr)
+	}
+	system, err = systemPrompt(c, cfg)
+	if err != nil {
+		return "", "", fmt.Errorf("prompt: system: %w", err)
+	}
+	user, err = buildUserPrompt(c, r, module)
+	if err != nil {
+		return "", "", fmt.Errorf("prompt: user: %w", err)
+	}
+	return system, user, nil
 }

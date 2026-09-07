@@ -46,8 +46,8 @@ func newRootCmd() *cobra.Command {
 		},
 	}
 	root.PersistentFlags().String("format", "json", "json (default, machine-readable) or text (human-readable)")
-	root.AddCommand(newCaptureCmd(), newExtractCmd(), newAnalyzeCmd(),
-		newApplyCmd(), newVerifyCmd(), newRunCmd(), newEscapeCmd(), newBenchgenCmd())
+	root.AddCommand(newCaptureCmd(), newExtractCmd(), newPromptCmd(),
+		newApplyCmd(), newVerifyCmd(), newEscapeCmd(), newBenchgenCmd())
 	return root
 }
 

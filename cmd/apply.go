@@ -1,43 +1,40 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/joaolaureano/profadvisor/internal/apply"
-	"github.com/joaolaureano/profadvisor/internal/schema"
 	"github.com/spf13/cobra"
 )
 
 func newApplyCmd() *cobra.Command {
 	var opts apply.Options
 	c := &cobra.Command{
-		Use:   "apply <diagnosis.json>",
-		Short: "Apply the suggested diff on a new branch",
-		Long: "Applies the diff from `analyze` on a fresh branch, never on the branch " +
-			"you are working on.\n\nThe command refuses to run against a dirty working " +
-			"tree, and if the diff fails to apply after the branch was created it " +
-			"deletes the branch and returns you to where you started. A suggestion " +
-			"that turns out to be wrong should cost you a branch, not your work.",
+		Use:   "apply <patch.diff>",
+		Short: "Apply a unified diff on a new branch",
+		Long: "Applies a unified diff on a fresh branch, never on the branch you are " +
+			"working on. The diff is a plain patch file, whatever produced it.\n\n" +
+			"The command refuses to run against a dirty working tree, and if the diff " +
+			"fails to apply after the branch was created it deletes the branch and " +
+			"returns you to where you started. A patch that turns out to be wrong " +
+			"costs you a branch, not your work.\n\n" +
+			"Reads standard input when the path is `-`.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			raw, err := os.ReadFile(args[0])
+			var (
+				raw []byte
+				err error
+			)
+			if args[0] == "-" {
+				raw, err = os.ReadFile(os.Stdin.Name())
+			} else {
+				raw, err = os.ReadFile(args[0])
+			}
 			if err != nil {
-				return fmt.Errorf("reading diagnosis: %w", err)
+				return fmt.Errorf("reading patch: %w", err)
 			}
-			var d schema.Diagnosis
-			if err := json.Unmarshal(raw, &d); err != nil {
-				return fmt.Errorf("%s is not analyze output: %w", args[0], err)
-			}
-			// Checked here and not only in analyze: apply is the step that
-			// writes to the user's repository, so reading a document from an
-			// incompatible build is the one place it must not guess.
-			if d.SchemaVersion != schema.Version {
-				return fmt.Errorf("%s has schema version %d, this build speaks %d",
-					args[0], d.SchemaVersion, schema.Version)
-			}
-			res, err := apply.Run(cmd.Context(), &d, opts)
+			res, err := apply.Run(cmd.Context(), string(raw), opts)
 			if err != nil {
 				return err
 			}

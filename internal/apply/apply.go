@@ -1,8 +1,8 @@
-// Package apply installs an analyzed change on an isolated Git branch.
+// Package apply installs a unified diff on an isolated Git branch.
 //
-// Applying an LLM-produced diff is the only pipeline step that mutates a
-// repository. The checks in this package deliberately happen before creating a
-// branch so a malformed suggestion cannot overwrite uncommitted work.
+// This is the only step that mutates the target repository. The checks here run
+// before the branch is created, so a malformed patch cannot overwrite
+// uncommitted work.
 package apply
 
 import (
@@ -16,7 +16,7 @@ import (
 	"github.com/joaolaureano/profadvisor/internal/schema"
 )
 
-// Options controls where and how a diagnosis is applied.
+// Options controls where and how a patch is applied.
 type Options struct {
 	// Dir is the target git repository root. Empty means the current directory.
 	Dir string
@@ -29,13 +29,10 @@ type Options struct {
 	DryRun bool
 }
 
-// Run applies d.Diff on a new branch and commits it.
-func Run(ctx context.Context, d *schema.Diagnosis, opts Options) (*schema.ApplyResult, error) {
-	if d == nil {
-		return nil, fmt.Errorf("apply: diagnosis is required")
-	}
-	if d.Diff == "" {
-		return nil, fmt.Errorf("apply: diagnosis diff is required")
+// Run applies diff on a new branch and commits it.
+func Run(ctx context.Context, diff string, opts Options) (*schema.ApplyResult, error) {
+	if strings.TrimSpace(diff) == "" {
+		return nil, fmt.Errorf("apply: diff is required")
 	}
 
 	// Check for tracked modifications only. The check exists so the suggestion
@@ -59,11 +56,11 @@ func Run(ctx context.Context, d *schema.Diagnosis, opts Options) (*schema.ApplyR
 		return nil, gitError("recording base commit", err, stderr)
 	}
 
-	files, stderr, err := numstat(ctx, opts.Dir, d.Diff)
+	files, stderr, err := numstat(ctx, opts.Dir, diff)
 	if err != nil {
 		return nil, gitError("reading changed files", err, stderr)
 	}
-	_, stderr, err = git(ctx, opts.Dir, strings.NewReader(d.Diff), "apply", "--check", "-")
+	_, stderr, err = git(ctx, opts.Dir, strings.NewReader(diff), "apply", "--check", "-")
 	if err != nil {
 		// Git's diagnosis is actionable here: generated diffs most often fail
 		// because their context no longer matches the checked-out source.
@@ -91,7 +88,7 @@ func Run(ctx context.Context, d *schema.Diagnosis, opts Options) (*schema.ApplyR
 	if err != nil {
 		return nil, gitError("creating branch", err, stderr)
 	}
-	_, stderr, err = git(ctx, opts.Dir, strings.NewReader(d.Diff), "apply", "-")
+	_, stderr, err = git(ctx, opts.Dir, strings.NewReader(diff), "apply", "-")
 	if err != nil {
 		rollbackErr := rollback(ctx, opts.Dir, baseRef, branch)
 		if rollbackErr != nil {
@@ -109,11 +106,9 @@ func Run(ctx context.Context, d *schema.Diagnosis, opts Options) (*schema.ApplyR
 	}
 	message := opts.Message
 	if message == "" {
-		subject := strings.SplitN(d.Change, "\n", 2)[0]
-		message = "profadvisor: " + subject
+		message = "profadvisor: apply " + strings.Join(res.FilesChanged, ", ")
 	}
-	body := d.Cause + "\n\nTarget: " + d.Target + "\nConfidence: " + d.Confidence
-	_, stderr, err = git(ctx, opts.Dir, nil, "commit", "-m", message, "-m", body)
+	_, stderr, err = git(ctx, opts.Dir, nil, "commit", "-m", message)
 	if err != nil {
 		return nil, gitError("committing changes", err, stderr)
 	}

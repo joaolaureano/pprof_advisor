@@ -14,7 +14,6 @@ import (
 	"github.com/joaolaureano/profadvisor/internal/extract"
 	"github.com/joaolaureano/profadvisor/internal/fixture"
 	"github.com/joaolaureano/profadvisor/internal/measurement"
-	"github.com/joaolaureano/profadvisor/internal/pipeline"
 	"github.com/joaolaureano/profadvisor/internal/schema"
 )
 
@@ -83,37 +82,6 @@ func TestTextExtract(t *testing.T) {
 		t.Fatal(err)
 	}
 	compareGolden(t, "extract.txt", got)
-}
-
-// TestTextDiagnosis tests rendering of a Diagnosis.
-func TestTextDiagnosis(t *testing.T) {
-	r := &schema.Diagnosis{
-		SchemaVersion: schema.Version,
-		Provider:      "openai",
-		Model:         "gpt-4",
-		Measurement:   measurement.Config{Profile: "cpu", Unit: "ns/op", SampleUnit: "ns"},
-		Target:        "example.com/pkg.someFunction",
-		Cause:         "The function allocates frequently in a loop",
-		Change:        "Use a sync.Pool to reuse the allocated buffer",
-		Confidence:    "high",
-		Risks:         []string{"The pool may not be thread-safe in all contexts"},
-		Diff: `--- a/pkg/file.go
-+++ b/pkg/file.go
-@@ -10,7 +10,7 @@ func someFunction(x int) {
-     for i := 0; i < x; i++ {
--        buf := make([]byte, 1024)
-+        buf := pool.Get().([]byte)
-         process(buf)
-+        pool.Put(buf)
-     }
- }
-`,
-	}
-	got, err := Text(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	compareGolden(t, "diagnosis.txt", got)
 }
 
 // TestTextApply tests rendering of an ApplyResult.
@@ -238,11 +206,6 @@ func TestTextEscape(t *testing.T) {
 	compareGolden(t, "escape.txt", got)
 }
 
-// TestTextPipeline tests rendering of a pipeline.Result.
-// Pipeline.Result is tested indirectly via cmd tests since we cannot import
-// pipeline here without creating an import cycle (pipeline imports analyze which imports render).
-// The reflection-based handling is covered by TestTextUnknownType and manual testing.
-
 // TestTextUnknownType should error with an unknown type.
 func TestTextUnknownType(t *testing.T) {
 	_, err := Text(42)
@@ -260,60 +223,6 @@ func TestTextNilPointer(t *testing.T) {
 	if err == nil {
 		t.Error("Text(nil *capture.Result) should return an error")
 	}
-}
-
-// TestTextPipelineRendersEveryStage covers the aggregate. It was the one
-// renderer with no test while pipeline.Result was reached through reflection,
-// because a test that named the type recreated the import cycle the reflection
-// existed to dodge — the most fragile path was the uncovered one.
-func TestTextPipelineRendersEveryStage(t *testing.T) {
-	cfg, err := measurement.Resolve(measurement.CPU, "ns/op")
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := Text(&pipeline.Result{
-		SchemaVersion: schema.Version,
-		Measurement:   cfg,
-		Baseline: &capture.Result{
-			Dir: "out/20260907T120000.000Z", Measurement: cfg,
-			ProfilePath: "out/20260907T120000.000Z/cpu.prof",
-			BenchPath:   "out/20260907T120000.000Z/bench.txt",
-			Command:     []string{"go", "test", "./...", "-bench", "."},
-			Duration:    12 * time.Second,
-		},
-		Diagnosis: &schema.Diagnosis{
-			SchemaVersion: schema.Version, Provider: "acme", Model: "m-1",
-			Measurement: cfg, Target: "pkg.Fn", Cause: "linear scan",
-			Change: "index it", Diff: "--- a/x.go\n+++ b/x.go\n@@ -1 +1 @@\n-a\n+b\n",
-			Confidence: "medium", Risks: []string{"ordering"},
-		},
-		Applied: &schema.ApplyResult{
-			SchemaVersion: schema.Version, Branch: "profadvisor/suggestion-1",
-			BaseRef: "main", Commit: "abc1234", FilesChanged: []string{"x.go"},
-		},
-		After: &capture.Result{
-			Dir: "out/20260907T120500.000Z", Measurement: cfg,
-			ProfilePath: "out/20260907T120500.000Z/cpu.prof",
-			BenchPath:   "out/20260907T120500.000Z/bench.txt",
-			Command:     []string{"go", "test", "./...", "-bench", "."},
-			Duration:    11 * time.Second,
-		},
-		Duration: 40 * time.Second,
-	})
-	if err != nil {
-		t.Fatalf("Text: %v", err)
-	}
-	// Hotspots is nil here on purpose: a stage that did not run must be named,
-	// not silently skipped, or the reader cannot tell it apart from a stage
-	// that ran and found nothing.
-	if !strings.Contains(got, "did not run") {
-		t.Error("a nil stage was rendered as if it had run")
-	}
-	// The run stops before judging; the output has to say what judges.
-	if !strings.Contains(got, "profadvisor verify --baseline ") {
-		t.Error("the record does not name the verify invocation that follows it")
-	}
-	compareGolden(t, "pipeline.txt", got)
 }
 
 // TestTextRejectsAnUnknownDocument keeps Text honest: a document with no

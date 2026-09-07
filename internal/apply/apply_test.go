@@ -7,13 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/joaolaureano/profadvisor/internal/schema"
 )
 
 func TestAppliesOnNewBranch(t *testing.T) {
 	dir := seedRepo(t)
-	d := diagnosis(validDiff())
+	d := validDiff()
 	res, err := Run(context.Background(), d, Options{Dir: dir})
 	if err != nil {
 		t.Fatal(err)
@@ -38,7 +36,7 @@ func TestDirtyTreeIsRefused(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "value.go"), []byte("package seed\n\nfunc Value() int { return 3 }\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := Run(context.Background(), diagnosis(validDiff()), Options{Dir: dir})
+	_, err := Run(context.Background(), validDiff(), Options{Dir: dir})
 	if err == nil || !strings.Contains(err.Error(), "uncommitted changes") {
 		t.Fatalf("error = %v", err)
 	}
@@ -50,7 +48,7 @@ func TestDirtyTreeIsRefused(t *testing.T) {
 func TestBadDiffIsRefusedAndLeavesNoBranch(t *testing.T) {
 	dir := seedRepo(t)
 	bad := strings.Replace(validDiff(), "return 1", "return 99", 1)
-	_, err := Run(context.Background(), diagnosis(bad), Options{Dir: dir})
+	_, err := Run(context.Background(), bad, Options{Dir: dir})
 	if err == nil {
 		t.Fatal("Run succeeded with an inapplicable diff")
 	}
@@ -64,12 +62,12 @@ func TestBadDiffIsRefusedAndLeavesNoBranch(t *testing.T) {
 
 func TestBranchNumberIncrements(t *testing.T) {
 	dir := seedRepo(t)
-	first, err := Run(context.Background(), diagnosis(validDiff()), Options{Dir: dir})
+	first, err := Run(context.Background(), validDiff(), Options{Dir: dir})
 	if err != nil {
 		t.Fatal(err)
 	}
 	gitRun(t, dir, "checkout", "master")
-	second, err := Run(context.Background(), diagnosis(validDiff()), Options{Dir: dir})
+	second, err := Run(context.Background(), validDiff(), Options{Dir: dir})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +79,7 @@ func TestBranchNumberIncrements(t *testing.T) {
 func TestDryRunMutatesNothing(t *testing.T) {
 	dir := seedRepo(t)
 	head := gitOutput(t, dir, "rev-parse", "HEAD")
-	res, err := Run(context.Background(), diagnosis(validDiff()), Options{Dir: dir, DryRun: true})
+	res, err := Run(context.Background(), validDiff(), Options{Dir: dir, DryRun: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +98,7 @@ func TestDryRunMutatesNothing(t *testing.T) {
 }
 
 func TestEmptyDiffIsError(t *testing.T) {
-	_, err := Run(context.Background(), &schema.Diagnosis{}, Options{})
+	_, err := Run(context.Background(), "", Options{})
 	if err == nil {
 		t.Fatal("Run succeeded with empty diff")
 	}
@@ -118,7 +116,7 @@ func TestApplyIgnoresUnrelatedUntrackedFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Applying should succeed despite the untracked file.
-	d := diagnosis(validDiff())
+	d := validDiff()
 	res, err := Run(context.Background(), d, Options{Dir: dir})
 	if err != nil {
 		t.Fatal(err)
@@ -144,7 +142,7 @@ func TestApplyStillRefusesModifiedTrackedFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Attempting to apply should still fail due to the uncommitted change.
-	d := diagnosis(validDiff())
+	d := validDiff()
 	_, err := Run(context.Background(), d, Options{Dir: dir})
 	if err == nil {
 		t.Fatal("Run succeeded despite uncommitted tracked changes")
@@ -174,10 +172,6 @@ func seedRepo(t *testing.T) string {
 	gitRun(t, dir, "add", "value.go")
 	gitRun(t, dir, "commit", "-m", "seed")
 	return dir
-}
-
-func diagnosis(diff string) *schema.Diagnosis {
-	return &schema.Diagnosis{Diff: diff, Change: "make Value faster", Cause: "test change", Target: "seed.Value", Confidence: "high"}
 }
 
 func validDiff() string {

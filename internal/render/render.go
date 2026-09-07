@@ -14,7 +14,6 @@ import (
 	"github.com/joaolaureano/profadvisor/internal/benchgen"
 	"github.com/joaolaureano/profadvisor/internal/capture"
 	"github.com/joaolaureano/profadvisor/internal/measurement"
-	"github.com/joaolaureano/profadvisor/internal/pipeline"
 	"github.com/joaolaureano/profadvisor/internal/schema"
 )
 
@@ -44,13 +43,6 @@ func Text(v any) (string, error) {
 		return textExtract(v)
 	case schema.ExtractResult:
 		return textExtract(&v)
-	case *schema.Diagnosis:
-		if v == nil {
-			return "", fmt.Errorf("Text: cannot render nil *schema.Diagnosis")
-		}
-		return textDiagnosis(v)
-	case schema.Diagnosis:
-		return textDiagnosis(&v)
 	case *schema.ApplyResult:
 		if v == nil {
 			return "", fmt.Errorf("Text: cannot render nil *schema.ApplyResult")
@@ -72,16 +64,32 @@ func Text(v any) (string, error) {
 		return textEscape(v)
 	case schema.EscapeReport:
 		return textEscape(&v)
-	case *pipeline.Result:
+	case *schema.PromptResult:
 		if v == nil {
-			return "", fmt.Errorf("Text: cannot render nil *pipeline.Result")
+			return "", fmt.Errorf("Text: cannot render nil *schema.PromptResult")
 		}
-		return textPipeline(v)
-	case pipeline.Result:
-		return textPipeline(&v)
+		return textPrompt(v), nil
+	case schema.PromptResult:
+		return textPrompt(&v), nil
 	default:
 		return "", fmt.Errorf("Text: unsupported type %T", v)
 	}
+}
+
+// textPrompt prints the two prompts ready to paste. The response schema is
+// omitted: it is a machine contract for a caller building its own request, and
+// that caller is reading the JSON form.
+func textPrompt(r *schema.PromptResult) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "=== system ===\n\n%s", r.System)
+	if !strings.HasSuffix(r.System, "\n") {
+		b.WriteString("\n")
+	}
+	fmt.Fprintf(&b, "\n=== user ===\n\n%s", r.User)
+	if !strings.HasSuffix(r.User, "\n") {
+		b.WriteString("\n")
+	}
+	return b.String()
 }
 
 func textBenchgen(r *benchgen.Result) string {
@@ -99,52 +107,6 @@ func textBenchgen(r *benchgen.Result) string {
 	}
 	fmt.Fprintf(&b, "  Generated: %t\n  Validated: %t\nReplay the seeds before measuring; generation does not execute the target.\n", r.Generated, r.Validated)
 	return b.String()
-}
-
-// textPipeline renders the record of a run: the artifacts each stage produced,
-// in order, and the command that turns them into a verdict.
-//
-// Every sub-document is a pointer and any of them can be nil — a run that broke
-// at step three still reports what it got that far with. Missing stages are
-// named rather than skipped silently, because "did not run" and "produced
-// nothing" are different facts.
-func textPipeline(r *pipeline.Result) (string, error) {
-	var b strings.Builder
-	fmt.Fprintf(&b, "Run\n")
-	fmt.Fprintf(&b, "  Schema version: %d\n", r.SchemaVersion)
-	fmt.Fprintf(&b, "  Objective:      %s (%s)\n", r.Measurement.Unit, r.Measurement.Profile)
-	fmt.Fprintf(&b, "  Duration:       %s\n", measurement.Nanos(int64(r.Duration)))
-
-	stages := []struct {
-		name string
-		doc  any
-		ran  bool
-	}{
-		{"Baseline capture", r.Baseline, r.Baseline != nil},
-		{"Hotspots", r.Hotspots, r.Hotspots != nil},
-		{"Diagnosis", r.Diagnosis, r.Diagnosis != nil},
-		{"Applied", r.Applied, r.Applied != nil},
-		{"Re-capture", r.After, r.After != nil},
-	}
-	for _, stage := range stages {
-		fmt.Fprintf(&b, "\n== %s ==\n\n", stage.name)
-		if !stage.ran {
-			fmt.Fprintf(&b, "did not run\n")
-			continue
-		}
-		part, err := Text(stage.doc)
-		if err != nil {
-			return "", fmt.Errorf("render %s: %w", stage.name, err)
-		}
-		b.WriteString(part)
-	}
-
-	// The run deliberately stops before judging; this is the step that judges.
-	if r.Baseline != nil && r.After != nil {
-		fmt.Fprintf(&b, "\n== Next ==\n\nprofadvisor verify --baseline %s --after %s\n",
-			r.Baseline.BenchPath, r.After.BenchPath)
-	}
-	return b.String(), nil
 }
 
 func textCapture(r *capture.Result) (string, error) {
@@ -216,31 +178,6 @@ func textExtract(r *schema.ExtractResult) (string, error) {
 		}
 	}
 
-	return buf.String(), nil
-}
-
-func textDiagnosis(r *schema.Diagnosis) (string, error) {
-	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "Diagnosis\n")
-	if r.Provider != "" {
-		fmt.Fprintf(&buf, "  Provider:       %s\n", r.Provider)
-	}
-	fmt.Fprintf(&buf, "  Model:          %s\n", r.Model)
-	fmt.Fprintf(&buf, "  Objective:      %s (%s)\n", r.Measurement.Unit, r.Measurement.Profile)
-	fmt.Fprintf(&buf, "  Target:         %s\n", r.Target)
-	fmt.Fprintf(&buf, "  Cause:          %s\n", r.Cause)
-	fmt.Fprintf(&buf, "  Change:         %s\n", r.Change)
-	fmt.Fprintf(&buf, "  Confidence:     %s\n", r.Confidence)
-	if len(r.Risks) > 0 {
-		fmt.Fprintf(&buf, "  Risks:\n")
-		for _, risk := range r.Risks {
-			fmt.Fprintf(&buf, "    - %s\n", risk)
-		}
-	}
-	fmt.Fprintf(&buf, "\nDiff:\n%s", r.Diff)
-	if !strings.HasSuffix(r.Diff, "\n") {
-		buf.WriteString("\n")
-	}
 	return buf.String(), nil
 }
 
