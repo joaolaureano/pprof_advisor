@@ -159,8 +159,11 @@ There is no exit code 2. It used to mean "the tool worked and the answer was
 bad", which put a measured regression into the process contract; a verdict is
 now a field in a document and nothing else. See "Reporting and judging" below.
 
-Each document carries `schema_version`, currently **3**. A consumer that does
-not recognize the version should stop rather than guess at the shape.
+Each document carries `schema_version`, currently **3**, with one exception:
+`capture` writes no version field. Its result is an artifact index — the two
+paths plus the `go` invocation — so do not branch on a version when reading it.
+A consumer that does not recognize a version it is given should stop rather than
+guess at the shape.
 
 `escape` is the exception, and deliberately so: its report carries
 `schema_version` **1** from a separate constant. The capture → extract → analyze
@@ -187,17 +190,20 @@ The verdict is not an opinion in the loose sense. The statistics are mechanical
 — `benchmath.AssumeNothing`, a non-parametric comparison — and the `p_value`,
 `delta_pct` and sample counts are all in the document, so you can ignore the
 roll-up and decide for yourself. What *is* a policy choice is exactly two
-things, both declared and both adjustable: the significance level (`--alpha`,
-default 0.05) and which metric plays which `role`, which follows from
-`--profile`/`--unit`.
+things, both adjustable: the significance level (`--alpha`, default 0.05) and
+which metric plays which `role`, which follows from `--profile`/`--unit`. The
+roles are in the document; the alpha that produced them is not, so record the
+invocation alongside the result if you did not use the default.
 
 `run` therefore stops before judging. It captures, extracts, diagnoses,
 applies, and re-captures, then hands you the two `bench.txt` paths and the
 `verify` invocation that turns them into a verdict. Chaining it yourself is one
 line, and it keeps "what happened" separate from "was it worth it".
 
-Every document also carries a `measurement` object — profile, unit, pprof sample
-type, sample unit, and attribution rule. Cost fields (`total`, `analyzed`,
+`capture`, `extract`, `analyze`, `verify` and `run` also carry a `measurement`
+object — profile, unit, pprof sample type, sample unit, and attribution rule. It
+is top-level in all of them except `extract`, which nests it under `profile`.
+`apply` has none: it moves a diff onto a branch and reads no metric. Cost fields (`total`, `analyzed`,
 `flat`, `cum`, `line_costs`) are plain numbers in `measurement.sample_unit`:
 nanoseconds for a CPU run, bytes or object counts for a memory one. **Do not
 assume nanoseconds.** Version 1 named these fields `*_nanos` and had no
@@ -246,7 +252,13 @@ build constraint prevents duplicate-symbol and orphan-package errors.
 
 `--write` additionally installs the live test file into the target package, without
 any build constraint. That is the copy that runs when you execute the tests.
-Existing files and symbol conflicts are refused.
+
+Generation refuses to proceed when the target package already declares
+`FuzzProfadvisor_<name>` or `BenchmarkProfadvisor_<name>`, or when the file it
+would install already exists. **This check runs even without `--write`**, so a
+second `--out`-only run against a package that still holds a previously
+installed copy fails rather than rewriting the record. Remove the installed file
+first if you want to regenerate.
 
 This reporter has its own schema version **4** and no measurement object.
 `generated: true` with `validated: false` means generation succeeded, not that
@@ -398,8 +410,13 @@ outcome, not a bug.
 ### `profadvisor apply <diagnosis.json>`
 
 Applies the diff on a new branch, `profadvisor/suggestion-N`, in the target
-repository, never on its working branch. Use `--dir` to name that repository;
-it defaults to the current directory.
+repository, never on its working branch. `N` is the next free number, so
+repeated runs accumulate branches rather than overwriting one. Use `--dir` to
+name that repository; it defaults to the current directory.
+
+**It leaves the repository checked out on the suggestion branch.** That differs
+from `run`, which returns you to the branch you started from. Check out your own
+branch again before running anything that assumes the original tree.
 
 ### `profadvisor verify --baseline <bench.txt> --after <bench.txt> [--unit <unit>]`
 

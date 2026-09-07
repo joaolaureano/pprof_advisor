@@ -127,6 +127,10 @@ model, API key, or benchmark execution is involved.
   --func parse --corpus /path/to/seeds --out /path/to/artifacts --write
 ```
 
+Replay the seeds before measuring. The generated fuzz target **checks for panics
+and nothing else** — it will not notice a rewrite that returns the wrong answer,
+so correctness stays your job.
+
 The corpus format, the accepted parameter types, interface selection, and the
 replay steps are in [AGENTS.md](AGENTS.md).
 
