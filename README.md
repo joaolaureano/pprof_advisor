@@ -5,9 +5,8 @@ actually improved it. It has no target of its own and knows nothing about the
 code it is pointed at: you give it a directory and a package pattern, and
 everything it reports comes from the profile and benchmark output of that run.
 
-**It runs entirely offline.** No API key, no network, no vendor. `net/http` is
-not linked into the binary. Where a language model fits, if you want one, is
-between two of its commands — `prompt` renders the question, you choose who
+**It runs entirely offline.** No API key, no network, no vendor. A language
+model is optional and external: `prompt` renders the question, you choose who
 answers, and `apply` takes the patch that comes back.
 
 ## Scope
@@ -37,6 +36,26 @@ Point it at a repository with `--dir` and a package inside it with `--pkg`.
 ./profadvisor capture --dir /path/to/your/repo --pkg ./internal/parser/ --count 10
 ```
 
+### If the package has no benchmarks yet
+
+Everything here measures `go test -bench`, so a package without benchmarks has
+nothing to profile. `benchgen` writes them for you from a directory of Go fuzz
+corpus files — one value per parameter, in the function's parameter order:
+
+```sh
+./profadvisor benchgen --dir /path/to/your/repo --pkg ./internal/parser \
+  --func parse --corpus /path/to/seeds --out /path/to/artifacts --write
+```
+
+`--write` installs the test file into the package; `--out` keeps a copy that is
+excluded from the build. You get one benchmark per seed and a fuzz target that
+replays them. Then continue below as normal.
+
+The generated fuzz target checks for panics and nothing else: it passes
+unchanged when the function is edited to return a wrong answer. The corpus
+format, the accepted parameter types and the replay steps are in
+[AGENTS.md](AGENTS.md).
+
 ### Finding the cost
 
 `capture` runs the benchmark once, keeping the profile and `bench.txt` from the
@@ -48,14 +67,13 @@ same run. `extract` ranks what it found:
 
 Runtime and standard-library frames are filtered out of the ranking, and where
 that cost went is reported separately in `excluded`. That second list is often
-the diagnosis: one hot function plus a wall of `runtime.concatstring2` and
-`runtime.mallocgc` says the fix is about allocation, not about the loop.
+the real diagnosis: one hot function plus a wall of `runtime.concatstring2` says
+the fix is about allocation, not about the loop.
 
 ### Choosing what to optimize
 
-One flag selects the objective, and it reaches every stage: which pprof sample
-type is read, which frame a cost is charged to, and which metric decides the
-verdict.
+One flag selects the objective, and it reaches every stage — what is profiled,
+and which metric decides the verdict.
 
 ```
 # CPU time — the default, optimizes ns/op
@@ -75,20 +93,20 @@ every contention event adds overhead, so absolute numbers from a contention
 capture are not comparable to a clean run; baseline and after are captured with
 identical flags.
 
-### Asking a model, if you want one
+### Asking a model — OPTIONAL
 
-`prompt` renders an extract document as the request a model would be given — a
-system prompt stating the objective, a user prompt carrying the hotspots and
-their source, and the JSON schema of the answer they ask for.
+**Skip this if you already know what to change.** Nothing below depends on it,
+and the verdict never does.
+
+`prompt` renders an extract document as a request a model can answer: the
+objective, the hotspots, and their source.
 
 ```
 ./profadvisor prompt extract.json --format text
 ```
 
-This command sends nothing. It opens no connection and names no vendor; it
-prints text. Paste it into a chat, or post it to whichever API you use. The
-wording lives in a JSON catalog embedded at build time; `--prompts <file>`
-renders from a different one.
+It sends nothing — it prints text. Paste it into a chat, or post it to whichever
+API you use, and keep the diff that comes back.
 
 ### Applying and judging
 
@@ -138,25 +156,8 @@ schema versions, and what each verdict means.
 A narrower question that needs no benchmark and no profile: what the compiler
 concluded about which values are heap-allocated. The conclusions are the
 compiler's, reported as normalized JSON. There is no severity, no ranking and no
-suggestion in the output. A heap allocation on a path that runs once costs
-nothing measurable, and this command measures nothing — that is what the loop
-above does.
-
-## Generating benchmarks
-
-`benchgen` turns a frozen directory of Go fuzz corpus files into a self-contained
-`_test.go` file and a manifest, using native Go fuzzing and fixed templates.
-
-```sh
-./profadvisor benchgen --dir /path/to/repo --pkg ./internal/parser \
-  --func parse --corpus /path/to/seeds --out /path/to/artifacts --write
-```
-
-The generated fuzz target checks for panics and nothing else: it passes
-unchanged when the function is edited to return a wrong answer.
-
-The corpus format, the accepted parameter types, interface selection, and the
-replay steps are in [AGENTS.md](AGENTS.md).
+suggestion in the output: a heap allocation on a path that runs once costs
+nothing measurable, and only a benchmark can say whether any of it matters.
 
 ## Two workflows
 
@@ -169,6 +170,10 @@ The full pipeline. Measure, find the hot path, ask for a patch, apply it,
 measure again, and let the statistics decide.
 
 ```sh
+# only if the package has no benchmarks yet
+profadvisor benchgen --dir ~/svc --pkg ./internal/parser \
+  --func parse --corpus ~/seeds --out ~/artifacts --write
+
 # measure the current state
 profadvisor capture --dir ~/svc --pkg ./internal/parser/ --count 10
 #   -> profadvisor-out/<t1>/{cpu.prof,bench.txt}
@@ -176,11 +181,12 @@ profadvisor capture --dir ~/svc --pkg ./internal/parser/ --count 10
 # rank the hot functions and attach their source
 profadvisor extract profadvisor-out/<t1>/cpu.prof > extract.json
 
-# ---- the only step a model touches ----
+# ---- OPTIONAL: the only step a model touches ----
 profadvisor prompt extract.json --format text > ask.txt
 #   paste ask.txt into a chat, or POST it to your own API endpoint;
 #   save the unified diff that comes back as patch.diff
-# ---------------------------------------
+#   (skip this and write patch.diff yourself — the rest is identical)
+# -------------------------------------------------
 
 profadvisor apply patch.diff --dir ~/svc
 #   -> applied on branch profadvisor/suggestion-1
@@ -232,9 +238,9 @@ profadvisor verify --baseline ... --after ... > verdict.json
 #   hand verdict.json, before.json and after.json to whatever you like
 ```
 
-`verify` reads benchmark output rather than profiles on purpose: a p-value needs
-N samples of a metric, and a profile holds one capture. The profiles say where
-the cost went; `bench.txt` says how much of it there was.
+`verify` reads `bench.txt` rather than the profiles: the profiles say where the
+cost went, `bench.txt` says how much of it there was, and only the second can be
+compared across runs.
 
 ## Testing
 
