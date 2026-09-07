@@ -126,6 +126,23 @@ caused the wait, which is the line a patch can change.
 - `escape` additionally needs nothing else: no benchmark, no profile, no git
   repository. It only needs the target to compile.
 
+## Providers and prompts
+
+No vendor is built in. `--provider` (or `PROFADVISOR_PROVIDER`) selects an
+adapter under `internal/llm/`; `anthropic` is the default and `openai` is the
+other one shipped. `--model`, `--base-url` and the API key come from flags or
+from `PROFADVISOR_MODEL`, `PROFADVISOR_BASE_URL` and `PROFADVISOR_API_KEY`, with
+the key falling back to the provider's own conventional variable. `--base-url`
+points at any endpoint speaking the selected provider's wire format, including a
+local one.
+
+Every word sent lives in `internal/prompt/prompts.json`, embedded at build time.
+Entries carry their text and the placeholders they declare, and the two are
+checked against each other at load, so a mistyped `{unit}` fails at startup
+rather than after a benchmark has already been paid for. `--prompts <file>`
+overrides the catalog without rebuilding. The exact bytes sent for each
+objective are pinned by golden files under `testdata/prompts/`.
+
 ## I/O contract
 
 Every subcommand follows the same rules, and tooling can rely on them:
@@ -242,8 +259,50 @@ Replay the generated `FuzzProfadvisor_<name>` seeds before measuring
 `BenchmarkProfadvisor_<name>`. Exploration via `go test -fuzz` is a separate user
 step. Import cache directories explicitly; never change the frozen corpus
 between baseline and after or select cases by speed. Commit the generated tests
-and manifest before `run`, which requires a clean tree. See the README for a
-complete example. There is no automatic integration with `run`.
+and manifest before `run`, which requires a clean tree. There is no automatic
+integration with `run`.
+
+**Corpus format.** Each file holds one complete argument tuple: one value per
+flattened parameter, in the function's parameter order, using the value's exact
+explicit conversion. A function with one `string` parameter therefore has one
+line after the header:
+
+```text
+go test fuzz v1
+string("example")
+```
+
+Use `[]byte("example\x00\xff")` for a `[]byte` parameter, and `int64(-42)`,
+`bool(true)` or `float64(1.5)` for scalars. Struct arguments contribute one line
+per supported leaf field, in declaration order, recursively — so a function
+taking `string`, `int64` and `bool` has three lines. The native special-float
+forms `NaN`, `+Inf`, `-Inf`, and `math.Float32frombits` /
+`math.Float64frombits` are accepted.
+
+**A complete example**, from the target repository:
+
+```sh
+profadvisor benchgen --dir /path/to/repo --pkg ./internal/parser \
+  --func parse --corpus /path/to/seeds --out /path/to/artifacts --write
+
+go test ./internal/parser -run '^FuzzProfadvisor_parse$'
+go test ./internal/parser -run '^$' -bench '^BenchmarkProfadvisor_parse$' -benchmem -count 10
+# Optional exploration, separate from measurement:
+go test ./internal/parser -run '^$' -fuzz '^FuzzProfadvisor_parse$' -fuzztime 30s
+```
+
+The generated `FuzzProfadvisor_parse` embeds each unique tuple with `f.Add` and
+detects panics; it defines no additional correctness property. The generated
+`BenchmarkProfadvisor_parse` has one sub-benchmark per seed, named by its
+SHA256. Inputs are prepared before `b.Loop()`, allocations are reported, and the
+measured loop calls the function directly. No fuzzing or random input generation
+occurs inside the benchmark.
+
+You may explicitly import a selected directory from Go's fuzz cache as
+`--corpus`; coverage discoveries live in that cache, and `testdata/fuzz` may
+also hold inputs that caused failures. Each generation freezes the selected
+corpus: it does not follow the cache or choose inputs by speed. Keep identical
+generated code and corpus hashes for baseline and after.
 
 ### `profadvisor capture --pkg <pattern> [--dir <repo>] [--profile cpu|memory|block|mutex] [--bench <regexp>] [--count N] [--rate N]`
 
@@ -398,6 +457,48 @@ plus `warnings` say why.
 Two conclusions the compiler can reach — `mutates_param` and `calls_param` — are
 gated behind a compiler debug flag this command does not pass, so they will not
 normally appear.
+
+One finding looks like this:
+
+```json
+{
+  "kind": "moved_to_heap",
+  "package": "example.com/svc/pkg/wal",
+  "file": "pkg/wal/wal.go", "line": 203, "column": 6,
+  "subject": "cabecalho",
+  "function": "(*Log).Append",
+  "flow": [
+    { "text": "{heap} ← &cabecalho:" },
+    { "text": "cabecalho", "reason": "address-of",
+      "file": "pkg/wal/wal.go", "line": 207, "column": 36 },
+    { "text": "(*bufio.Writer).Write(l.buf, cabecalho[:])", "reason": "call parameter",
+      "file": "pkg/wal/wal.go", "line": 207, "column": 26 }
+  ],
+  "evidence": "pkg/wal/wal.go:203:6: moved to heap: cabecalho"
+}
+```
+
+That is a real record with one flow hop elided and the module path replaced. The
+`flow` is the compiler's own account of how the value reached the heap, read
+bottom-up.
+
+**What "covers the vocabulary" means here.** Passing on a corpus only proves the
+parser handles what that corpus happened to provoke, which is a weak guarantee:
+three conclusions are gated behind a compiler debug flag, and the warning the
+compiler prints when it abandons a flow at an assignment cycle appeared in
+neither the corpus nor a real nine-package service with 5868 diagnostic lines.
+So the inventory is transcribed from the format strings in
+`cmd/compile/internal/escape` and checked as a table —
+`TestParseCoversEveryCompilerTemplate`, 28 templates, each mapped to the kind it
+must produce or to the decision not to report it. Two things are outside it on
+purpose: the compiler's two hard errors, which fail the build instead of
+reaching a report, and the per-statement tracing, which needs `-m=3` while this
+tool fixes `-m=2`.
+
+That inventory is a snapshot of one release. A newer toolchain than the parser
+was validated against is reported in `warnings` and still parsed, and anything
+genuinely new lands in `unrecognized` — the guarantee is that a gap announces
+itself, not that gaps cannot happen.
 
 Not every finding is in a file you can edit. The compiler re-analyzes inlined
 bodies in the context of the package that inlined them, and it analyzes the
