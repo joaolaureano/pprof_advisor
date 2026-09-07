@@ -1,5 +1,6 @@
 {
-  "1": "Catalog",
+  "0": "Load",
+  "1": "newClient",
   "2": "profadvisor",
   "3": "FromReaders",
   "4": "Resolve",
@@ -23,6 +24,6 @@
   "23": "escape/README.md",
   "24": "doc.go",
   "25": "example.com/escapecorpus",
-  "26": "Load",
+  "26": "testing.B",
   "27": "Text"
 }
