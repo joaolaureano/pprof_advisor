@@ -1,5 +1,7 @@
 # profadvisor
 
+**[Leia em português / Read this in Portuguese](README.pt-BR.md)**
+
 Measures where a Go package spends time or memory, and decides whether a change
 actually improved it. It has no target of its own and knows nothing about the
 code it is pointed at: you give it a directory and a package pattern, and
