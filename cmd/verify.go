@@ -16,11 +16,11 @@ func newVerifyCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "verify --baseline <bench.txt> --after <bench.txt>",
 		Short: "Decide whether a change actually improved the objective",
-		Long: "Compares two `go test -bench -benchmem` outputs and returns MELHOROU, " +
-			"SEM DIFERENÇA, or PIOROU per benchmark and metric, with the percentage " +
+		Long: "Compares two `go test -bench -benchmem` outputs and returns IMPROVED, " +
+			"NO CHANGE, or REGRESSED per benchmark and metric, with the percentage " +
 			"delta and a p-value.\n\nThe verdict is decided by the objective chosen " +
 			"with --unit, and by its guards: a memory objective is guarded by ns/op, " +
-			"so a patch that saves bytes and costs time is PIOROU. Every other metric " +
+			"so a patch that saves bytes and costs time is REGRESSED. Every other metric " +
 			"is reported and votes on nothing.\n\nThe inputs are benchmark output, " +
 			"not profiles: a p-value needs N samples of the metric, and a profile says " +
 			"where the cost went, not how much there was. Capture both sides with " +

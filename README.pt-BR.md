@@ -89,7 +89,7 @@ e qual métrica decide o veredito.
 ```
 
 Uma execução de memória leva `ns/op` como guarda: ele pode transformar o
-resultado consolidado em `PIOROU`, mas nunca em `MELHOROU`. Execuções de
+resultado consolidado em `REGRESSED`, mas nunca em `IMPROVED`. Execuções de
 contenção também são julgadas por `ns/op`. Registrar cada evento de contenção
 adiciona overhead, então os números absolutos de uma captura de contenção não são
 comparáveis aos de uma execução limpa; baseline e depois são capturados com
@@ -125,7 +125,7 @@ a branch e devolve você ao ponto de partida. Depois, capture de novo e compare:
 ./profadvisor verify --baseline <baseline bench.txt> --after <after bench.txt> --format text
 ```
 
-Isso imprime `MELHOROU`, `SEM DIFERENÇA` ou `PIOROU` por benchmark e métrica, com
+Isso imprime `IMPROVED`, `NO CHANGE` ou `REGRESSED` por benchmark e métrica, com
 o delta, um p-valor e o número de amostras. Os três vereditos saem com código 0.
 
 ### Lendo a saída
@@ -201,8 +201,8 @@ profadvisor verify \
   --after    profadvisor-out/<t2>/bench.txt --format text
 ```
 
-Quem decide é o `verify`, não o modelo. Se a resposta for `SEM DIFERENÇA` ou
-`PIOROU`, apague a branch — esse resultado custou um ciclo e é o caso normal, não
+Quem decide é o `verify`, não o modelo. Se a resposta for `NO CHANGE` ou
+`REGRESSED`, apague a branch — esse resultado custou um ciclo e é o caso normal, não
 uma falha. Use o mesmo `--profile`/`--unit` nas duas capturas; comparar uma
 execução de memória com uma de CPU é comparar programas diferentes.
 

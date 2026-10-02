@@ -169,9 +169,9 @@ type ApplyResult struct {
 // Verdict values. These are the strings the CLI prints and AGENTS.md documents;
 // they are part of the contract.
 const (
-	VerdictImproved  = "MELHOROU"
-	VerdictNoChange  = "SEM DIFERENÇA"
-	VerdictRegressed = "PIOROU"
+	VerdictImproved  = "IMPROVED"
+	VerdictNoChange  = "NO CHANGE"
+	VerdictRegressed = "REGRESSED"
 )
 
 // VerifyResult is what `profadvisor verify` writes to stdout.
@@ -185,8 +185,8 @@ type VerifyResult struct {
 	// was read, but only this one decides whether the change was worth making.
 	Measurement measurement.Config `json:"measurement"`
 	// Verdict is the roll-up. It is decided by the objective and the guard
-	// metrics only: a regression in either is PIOROU, otherwise an improvement
-	// in the objective is MELHOROU, otherwise SEM DIFERENÇA. Informational
+	// metrics only: a regression in either is REGRESSED, otherwise an improvement
+	// in the objective is IMPROVED, otherwise NO CHANGE. Informational
 	// metrics are reported and never voted, which is what lets a memory run
 	// accept a patch that allocates fewer bytes in more, smaller pieces.
 	Verdict     string            `json:"verdict"`

@@ -89,8 +89,8 @@ and which metric decides the verdict.
 ./profadvisor capture --dir /path/to/your/repo --pkg ./internal/sync/ --profile block
 ```
 
-A memory run carries `ns/op` as a guard: it can turn the roll-up into `PIOROU`
-but never into `MELHOROU`. Contention runs are judged on `ns/op` too. Recording
+A memory run carries `ns/op` as a guard: it can turn the roll-up into `REGRESSED`
+but never into `IMPROVED`. Contention runs are judged on `ns/op` too. Recording
 every contention event adds overhead, so absolute numbers from a contention
 capture are not comparable to a clean run; baseline and after are captured with
 identical flags.
@@ -126,7 +126,7 @@ compare:
 ./profadvisor verify --baseline <baseline bench.txt> --after <after bench.txt> --format text
 ```
 
-That prints `MELHOROU`, `SEM DIFERENÇA` or `PIOROU` per benchmark and metric,
+That prints `IMPROVED`, `NO CHANGE` or `REGRESSED` per benchmark and metric,
 with the delta, a p-value and the sample counts. All three verdicts exit 0.
 
 ### Reading the output
@@ -202,7 +202,7 @@ profadvisor verify \
   --after    profadvisor-out/<t2>/bench.txt --format text
 ```
 
-`verify` decides, not the model. If the answer is `SEM DIFERENÇA` or `PIOROU`,
+`verify` decides, not the model. If the answer is `NO CHANGE` or `REGRESSED`,
 delete the branch — that outcome cost one cycle and is the normal case, not a
 failure. Use the same `--profile`/`--unit` on both captures; comparing a memory
 run against a CPU run compares different programs.

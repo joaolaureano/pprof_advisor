@@ -207,8 +207,8 @@ func textVerify(r *schema.VerifyResult) (string, error) {
 		// guessing at, and a fixed column that overflows is worse than no
 		// column at all: it silently destroys the alignment of every row
 		// after it.
-		// Counted in runes, not bytes: the verdicts are Portuguese and
-		// "SEM DIFERENÇA" is 14 bytes but 13 columns wide.
+		// Counted in runes, not bytes, so a non-ASCII benchmark name or unit
+		// still lines up.
 		w := func(header string, get func(schema.BenchComparison) string) int {
 			n := utf8.RuneCountInString(header)
 			for _, c := range r.Comparisons {

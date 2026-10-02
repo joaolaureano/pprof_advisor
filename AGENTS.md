@@ -83,7 +83,7 @@ worth a patch.
 
 **A memory run keeps `ns/op` as a guard.** Trading time for memory is easy and
 usually not what was asked for, so a patch that significantly slows the
-benchmark is `PIOROU` even when it allocates less. The two memory units do not
+benchmark is `REGRESSED` even when it allocates less. The two memory units do not
 guard each other: fewer bytes in more allocations is a legitimate outcome, so
 the unit you did not choose is reported and votes on nothing.
 
@@ -447,8 +447,8 @@ commit message is the touched file list, or `--message` when given.
 
 ### `profadvisor verify --baseline <bench.txt> --after <bench.txt> [--unit <unit>]`
 
-Compares two benchmark outputs and returns `MELHOROU`, `SEM DIFERENÇA`, or
-`PIOROU`, with the percentage delta and a p-value.
+Compares two benchmark outputs and returns `IMPROVED`, `NO CHANGE`, or
+`REGRESSED`, with the percentage delta and a p-value.
 
 `comparisons` holds one entry per benchmark **and metric**, each tagged with a
 `role`:
@@ -457,8 +457,8 @@ Compares two benchmark outputs and returns `MELHOROU`, `SEM DIFERENÇA`, or
 - `guard` — `ns/op` on a memory run. It can veto, never accept.
 - `informational` — reported, never voted.
 
-The roll-up is `PIOROU` if the objective or a guard regressed significantly,
-otherwise `MELHOROU` if the objective improved, otherwise `SEM DIFERENÇA`.
+The roll-up is `REGRESSED` if the objective or a guard regressed significantly,
+otherwise `IMPROVED` if the objective improved, otherwise `NO CHANGE`.
 
 Note the inputs: this compares **benchmark output**, not profiles. A p-value
 needs N samples of the metric, which a profile does not contain — a profile says
@@ -557,10 +557,10 @@ was four findings out of 683.
 A completed `capture` or `apply` means only that the step ran. Whether the
 change helped is `verify`'s answer:
 
-- `MELHOROU` — the objective improved at the chosen alpha.
-- `SEM DIFERENÇA` — the difference was not significant.
-- `PIOROU` — the objective or a guard regressed significantly. On a memory run,
-  the per-metric rows say which: a `PIOROU` from the `ns/op` guard while the
+- `IMPROVED` — the objective improved at the chosen alpha.
+- `NO CHANGE` — the difference was not significant.
+- `REGRESSED` — the objective or a guard regressed significantly. On a memory run,
+  the per-metric rows say which: a `REGRESSED` from the `ns/op` guard while the
   objective improved is a patch that spent time to save bytes.
 
 All three exit 0. The verdict is a field in the document; a regression is a
